@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Trdng.Bybit/Trdng.Bybit.csproj" />
+    <Project Path="src/Trdng.Core/Trdng.Core.csproj" />
+    <Project Path="src/Trdng.Desktop/Trdng.Desktop.csproj" />
+    <Project Path="src/Trdng.Gate/Trdng.Gate.csproj" />
+    <Project Path="src/Trdng.Mexc/Trdng.Mexc.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Trdng.Core.Tests/Trdng.Core.Tests.csproj" />
+  </Folder>
+</Solution>

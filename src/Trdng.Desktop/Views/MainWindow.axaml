@@ -1,0 +1,195 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Trdng.Desktop.ViewModels"
+        x:Class="Trdng.Desktop.Views.MainWindow"
+        x:DataType="vm:MainViewModel"
+        Width="1280" Height="720" MinWidth="960" MinHeight="540"
+        FontSize="14" Background="#0B0D10" Foreground="#F3F4F6"
+        Title="{Binding InstrumentTitle}">
+  <Window.Resources>
+    <DataTemplate x:Key="AskRow" x:DataType="vm:BookLevelViewModel">
+      <Grid Height="{Binding RowHeight}" Opacity="{Binding RowOpacity}">
+        <Border Width="{Binding VisualWidth}" HorizontalAlignment="Right" Background="#663B171E" />
+        <Grid Margin="10,0" ColumnDefinitions="12,Auto,*,Auto">
+          <TextBlock Text="{Binding SignificanceMarker}" Foreground="#FF6B78" VerticalAlignment="Center" />
+          <TextBlock Grid.Column="1" Text="{Binding Quantity}" FontSize="{Binding TextSize}" FontWeight="SemiBold" VerticalAlignment="Center" />
+          <TextBlock Grid.Column="2" Text="{Binding Behavior}" Foreground="{Binding BehaviorColor}" FontSize="{Binding BehaviorTextSize}" FontWeight="Bold" Margin="6,0" VerticalAlignment="Center" />
+          <TextBlock Grid.Column="3" Text="{Binding Price}" Foreground="#F19A9A" FontSize="{Binding TextSize}" VerticalAlignment="Center" />
+        </Grid>
+      </Grid>
+    </DataTemplate>
+    <DataTemplate x:Key="BidRow" x:DataType="vm:BookLevelViewModel">
+      <Grid Height="{Binding RowHeight}" Opacity="{Binding RowOpacity}">
+        <Border Width="{Binding VisualWidth}" HorizontalAlignment="Left" Background="#66305225" />
+        <Grid Margin="10,0" ColumnDefinitions="12,Auto,*,Auto">
+          <TextBlock Text="{Binding SignificanceMarker}" Foreground="#56D89B" VerticalAlignment="Center" />
+          <TextBlock Grid.Column="1" Text="{Binding Quantity}" FontSize="{Binding TextSize}" FontWeight="SemiBold" VerticalAlignment="Center" />
+          <TextBlock Grid.Column="2" Text="{Binding Behavior}" Foreground="{Binding BehaviorColor}" FontSize="{Binding BehaviorTextSize}" FontWeight="Bold" Margin="6,0" VerticalAlignment="Center" />
+          <TextBlock Grid.Column="3" Text="{Binding Price}" Foreground="#8ED6B0" FontSize="{Binding TextSize}" VerticalAlignment="Center" />
+        </Grid>
+      </Grid>
+    </DataTemplate>
+  </Window.Resources>
+
+  <Grid RowDefinitions="54,*,36">
+    <Border BorderBrush="#242830" BorderThickness="0,0,0,1">
+      <Grid Margin="16,0" ColumnDefinitions="*,Auto,*">
+        <StackPanel VerticalAlignment="Center">
+          <TextBlock Text="{Binding InstrumentTitle}" FontWeight="SemiBold" />
+          <TextBlock Text="ТРИ БИРЖИ · КНИГИ РАЗДЕЛЕНЫ" Foreground="#8B93A1" FontSize="10" />
+        </StackPanel>
+        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+          <TextBlock Text="{Binding CrossVenueDivergence}" Foreground="{Binding CrossVenueDivergenceColor}" FontWeight="SemiBold" HorizontalAlignment="Center" />
+          <TextBlock Text="{Binding ConsensusVerdict}" Foreground="{Binding ConsensusColor}" FontSize="10" HorizontalAlignment="Center" />
+        </StackPanel>
+        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="10" HorizontalAlignment="Right" VerticalAlignment="Center">
+          <TextBlock Text="{Binding MexcConnectionStatus, StringFormat='MEXC {0}'}" />
+          <TextBlock Text="{Binding GateConnectionStatus, StringFormat='GATE {0}'}" />
+          <TextBlock Text="{Binding ConnectionStatus, StringFormat='BYBIT {0}'}" />
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <Grid x:Name="OrderBookSurface" Grid.Row="1" ColumnDefinitions="190,*,*,*">
+      <Border BorderBrush="#242830" BorderThickness="0,0,1,0" Padding="12">
+        <StackPanel Spacing="7">
+          <TextBlock Text="{Binding ProductLabel, StringFormat='ПРОДУКТ · {0}'}" Foreground="#D8DDE5" FontWeight="SemiBold" FontSize="11" />
+          <Grid ColumnDefinitions="*,*" ColumnSpacing="6">
+            <Button Content="SPOT" Click="SelectSpot_Click" Padding="8,7" />
+            <Button Grid.Column="1" Content="FUTURES" Click="SelectFutures_Click" Padding="8,7" />
+          </Grid>
+          <TextBlock Text="АКТИВ" Foreground="#8B93A1" FontSize="11" Margin="0,8,0,0" />
+          <Grid ColumnDefinitions="*,*" ColumnSpacing="6">
+            <Button Content="APT / USDT" Click="SelectApt_Click" Padding="8,7" />
+            <Button Grid.Column="1" Content="BTC / USDT" Click="SelectBtc_Click" Padding="8,7" />
+          </Grid>
+          <Border Background="#15181D" CornerRadius="6" Padding="10" Margin="0,12,0,0">
+            <StackPanel Spacing="7">
+              <TextBlock Text="ГЛУБИНА" Foreground="#8B93A1" FontSize="10" />
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Content="−" Click="MoreDepth_Click" Padding="10,3" />
+                <TextBlock Text="{Binding DepthLabel}" VerticalAlignment="Center" />
+                <Button Content="+" Click="LessDepth_Click" Padding="10,3" />
+              </StackPanel>
+            </StackPanel>
+          </Border>
+          <Border Background="#15181D" BorderBrush="#343A45" BorderThickness="1"
+                  CornerRadius="6" Padding="10" Margin="0,10,0,0">
+            <StackPanel Spacing="7">
+              <TextBlock Text="DRY RUN · ОРДЕР НЕ ОТПРАВЛЯЕТСЯ"
+                         Foreground="#F5C96A" FontWeight="Bold" FontSize="10"
+                         TextWrapping="Wrap" />
+              <TextBlock Text="АКТИВНАЯ БИРЖА" Foreground="#8B93A1" FontSize="9" />
+              <Grid ColumnDefinitions="*,*,*" ColumnSpacing="4">
+                <Button Content="MEXC" Click="SelectDryRunMexc_Click" Padding="4,5" FontSize="10" />
+                <Button Grid.Column="1" Content="GATE" Click="SelectDryRunGate_Click" Padding="4,5" FontSize="10" />
+                <Button Grid.Column="2" Content="BYBIT" Click="SelectDryRunBybit_Click" Padding="4,5" FontSize="10" />
+              </Grid>
+              <TextBlock Text="{Binding ActiveDryRunVenue, StringFormat='ВЫБРАНА · {0}'}"
+                         FontWeight="SemiBold" />
+              <Grid ColumnDefinitions="*,*" ColumnSpacing="5">
+                <Button Content="BUY MARKET" Click="SelectDryRunBuy_Click" Padding="4,6" />
+                <Button Grid.Column="1" Content="SELL MARKET" Click="SelectDryRunSell_Click" Padding="4,6" />
+              </Grid>
+              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                <TextBox Text="{Binding DryRunValueText, Mode=TwoWay}"
+                         PlaceholderText="Размер" />
+                <TextBlock Grid.Column="1" Text="{Binding DryRunUnit}"
+                           FontWeight="Bold" VerticalAlignment="Center" />
+              </Grid>
+              <TextBlock Text="{Binding DryRunRoute}" Foreground="#AEB6C3"
+                         FontSize="10" TextWrapping="Wrap" />
+              <TextBlock Text="{Binding DryRunPreview}" Foreground="#F5C96A"
+                         FontSize="10" FontWeight="SemiBold" TextWrapping="Wrap" />
+              <TextBlock Text="{Binding DryRunLimitLabel}" Foreground="#AEB6C3"
+                         FontSize="9" TextWrapping="Wrap" />
+              <Border Background="#24171A" CornerRadius="4" Padding="7,5">
+                <TextBlock Text="{Binding DryRunRiskState}" Foreground="#FF9CA6"
+                           FontWeight="Bold" HorizontalAlignment="Center" />
+              </Border>
+              <Grid ColumnDefinitions="*,*" ColumnSpacing="5">
+                <Button Content="STOP" Click="EngageDryRunStop_Click" Padding="4,6" />
+                <Button Grid.Column="1" Content="SAFE · DRY RUN"
+                        Click="DisengageDryRunStop_Click" Padding="4,6" FontSize="9" />
+              </Grid>
+              <Button Content="ПОДГОТОВИТЬ DRY RUN"
+                      Click="PrepareDryRunSimulation_Click" Padding="5,7" />
+              <Button Content="ПОДТВЕРДИТЬ СИМУЛЯЦИЮ"
+                      Click="ConfirmDryRunSimulation_Click" Padding="5,7" />
+              <Button Content="ПРОИГРАТЬ СИМУЛЯЦИЮ"
+                      Click="PlayDryRunSimulation_Click" Padding="5,7" />
+              <TextBlock Text="{Binding DryRunConfirmationState}" Foreground="#F5C96A"
+                         FontSize="9" TextWrapping="Wrap" />
+              <TextBlock Text="{Binding SimulationTimeline}" Foreground="#AEB6C3"
+                         FontSize="9" TextWrapping="Wrap" />
+              <TextBlock Text="SIMULATION ONLY · TRADING ADAPTER NOT IMPLEMENTED"
+                         Foreground="#656D79" FontSize="9" TextWrapping="Wrap" />
+            </StackPanel>
+          </Border>
+          <Border Background="#15181D" BorderBrush="#2A2F37" BorderThickness="1"
+                  CornerRadius="6" Padding="10" Margin="0,8,0,0">
+            <StackPanel Spacing="3">
+              <TextBlock Text="MEXC API" FontWeight="SemiBold" />
+              <TextBlock Text="{Binding MexcCredentialStatus}" Foreground="#8B93A1"
+                         FontSize="10" TextWrapping="Wrap" />
+              <TextBlock Text="{Binding MexcPrivateStatus}" Foreground="#8B93A1"
+                         FontSize="9" TextWrapping="Wrap" />
+              <TextBlock Text="{Binding MexcOrderTestStatus}" Foreground="#8B93A1"
+                         FontSize="9" TextWrapping="Wrap" />
+              <TextBlock Text="KEYCHAIN · ЗНАЧЕНИЯ СКРЫТЫ" Foreground="#656D79"
+                         FontSize="9" />
+              <Button Content="УДАЛИТЬ ИЗ KEYCHAIN"
+                      IsVisible="{Binding CanRevokeMexcCredential}"
+                      Click="ArmMexcCredentialRevoke_Click" Padding="5,6" />
+              <Button Content="ПОДТВЕРДИТЬ УДАЛЕНИЕ"
+                      IsVisible="{Binding CanConfirmRevokeMexcCredential}"
+                      Click="ConfirmMexcCredentialRevoke_Click" Padding="5,6" />
+              <TextBlock Text="{Binding MexcCredentialAction}" Foreground="#F5C96A"
+                         FontSize="9" TextWrapping="Wrap" />
+            </StackPanel>
+          </Border>
+        </StackPanel>
+      </Border>
+
+      <!-- Stable venue order: MEXC, Gate, Bybit. Each card owns its own book. -->
+      <Border Grid.Column="1" BorderBrush="#242830" BorderThickness="0,0,1,0">
+        <Grid RowDefinitions="42,*,38,*">
+          <Grid Margin="10,0" ColumnDefinitions="*,Auto">
+            <TextBlock Text="{Binding MexcCardTitle}" FontWeight="SemiBold" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="1" Text="{Binding MexcConnectionStatus}" Foreground="#8B93A1" FontSize="10" VerticalAlignment="Center" />
+          </Grid>
+          <Grid Grid.Row="1">
+            <TextBlock Text="{Binding MexcEmptyState}" Foreground="#656D79" FontSize="11" TextWrapping="Wrap" Margin="20" HorizontalAlignment="Center" VerticalAlignment="Center" />
+            <ItemsControl ItemsSource="{Binding MexcAsks}" ItemTemplate="{StaticResource AskRow}" VerticalAlignment="Bottom" ClipToBounds="True" />
+          </Grid>
+          <Border Grid.Row="2" Background="#171A20" BorderBrush="#242830" BorderThickness="0,1">
+            <Grid Margin="10,0" ColumnDefinitions="*,Auto"><TextBlock Text="{Binding MexcSpread, StringFormat='Спред {0}'}" Foreground="#8B93A1" VerticalAlignment="Center" /><TextBlock Grid.Column="1" Text="{Binding MexcLastPrice}" FontWeight="SemiBold" VerticalAlignment="Center" /></Grid>
+          </Border>
+          <ItemsControl Grid.Row="3" ItemsSource="{Binding MexcBids}" ItemTemplate="{StaticResource BidRow}" ClipToBounds="True" />
+        </Grid>
+      </Border>
+
+      <Border Grid.Column="2" BorderBrush="#242830" BorderThickness="0,0,1,0">
+        <Grid RowDefinitions="42,*,38,*">
+          <Grid Margin="10,0" ColumnDefinitions="*,Auto"><TextBlock Text="{Binding GateCardTitle}" FontWeight="SemiBold" VerticalAlignment="Center" /><TextBlock Grid.Column="1" Text="{Binding GateConnectionStatus}" Foreground="#8B93A1" FontSize="10" VerticalAlignment="Center" /></Grid>
+          <Grid Grid.Row="1"><TextBlock Text="{Binding GateEmptyState}" Foreground="#656D79" FontSize="11" TextWrapping="Wrap" Margin="20" HorizontalAlignment="Center" VerticalAlignment="Center" /><ItemsControl ItemsSource="{Binding GateAsks}" ItemTemplate="{StaticResource AskRow}" VerticalAlignment="Bottom" ClipToBounds="True" /></Grid>
+          <Border Grid.Row="2" Background="#171A20" BorderBrush="#242830" BorderThickness="0,1"><Grid Margin="10,0" ColumnDefinitions="*,Auto"><TextBlock Text="{Binding GateSpread, StringFormat='Спред {0}'}" Foreground="#8B93A1" VerticalAlignment="Center" /><TextBlock Grid.Column="1" Text="{Binding GateLastPrice}" FontWeight="SemiBold" VerticalAlignment="Center" /></Grid></Border>
+          <ItemsControl Grid.Row="3" ItemsSource="{Binding GateBids}" ItemTemplate="{StaticResource BidRow}" ClipToBounds="True" />
+        </Grid>
+      </Border>
+
+      <Border Grid.Column="3">
+        <Grid RowDefinitions="42,*,38,*">
+          <Grid Margin="10,0" ColumnDefinitions="*,Auto"><TextBlock Text="{Binding BybitCardTitle}" FontWeight="SemiBold" VerticalAlignment="Center" /><TextBlock Grid.Column="1" Text="{Binding ConnectionStatus}" Foreground="#8B93A1" FontSize="10" VerticalAlignment="Center" /></Grid>
+          <Grid Grid.Row="1"><TextBlock Text="{Binding BybitEmptyState}" Foreground="#656D79" FontSize="11" TextWrapping="Wrap" Margin="20" HorizontalAlignment="Center" VerticalAlignment="Center" /><ItemsControl ItemsSource="{Binding Asks}" ItemTemplate="{StaticResource AskRow}" VerticalAlignment="Bottom" ClipToBounds="True" /></Grid>
+          <Border Grid.Row="2" Background="#171A20" BorderBrush="#242830" BorderThickness="0,1"><Grid Margin="10,0" ColumnDefinitions="*,Auto"><TextBlock Text="{Binding Spread, StringFormat='Спред {0}'}" Foreground="#8B93A1" VerticalAlignment="Center" /><TextBlock Grid.Column="1" Text="{Binding LastPrice}" FontWeight="SemiBold" VerticalAlignment="Center" /></Grid></Border>
+          <ItemsControl Grid.Row="3" ItemsSource="{Binding Bids}" ItemTemplate="{StaticResource BidRow}" ClipToBounds="True" />
+        </Grid>
+      </Border>
+    </Grid>
+
+    <Border Grid.Row="2" BorderBrush="#242830" BorderThickness="0,1,0,0">
+      <TextBlock Text="{Binding SharedScaleLabel}" Foreground="#8B93A1" FontSize="11" Margin="16,0" VerticalAlignment="Center" />
+    </Border>
+  </Grid>
+</Window>

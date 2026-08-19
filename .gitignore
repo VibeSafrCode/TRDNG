@@ -1,0 +1,50 @@
+# Third-party installers and extracted vendor payloads stay local.
+analysis/vendor-installer/
+*.exe
+
+# macOS metadata.
+.DS_Store
+
+# Local SDK and .NET build output.
+.tools/
+**/bin/
+**/obj/
+artifacts/
+
+# Local environment and diagnostic files must never enter version control.
+.env
+.env.*
+*.log
+
+# Credentials, signing material and local trust stores.
+*.key
+*.pem
+*.p12
+*.pfx
+*.cer
+*.crt
+*.mobileprovision
+*.keychain
+*.keychain-db
+*.secrets.json
+secrets/
+
+# Local simulation state and diagnostics.
+*.journal
+*.journal.*
+*.dump
+*.dmp
+core
+core.*
+*.crash
+*.trace
+*.nettrace
+*.gcdump
+*.speedscope.json
+vmmap*.txt
+
+# IDE/user-local state.
+.idea/
+.vscode/
+*.user
+*.suo

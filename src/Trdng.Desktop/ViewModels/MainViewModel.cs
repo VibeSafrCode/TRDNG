@@ -1,0 +1,1475 @@
+using System.Collections.ObjectModel;
+using System.Globalization;
+using Avalonia.Threading;
+using CommunityToolkit.Mvvm.ComponentModel;
+using Trdng.Bybit.MarketData;
+using Trdng.Core.Clusters;
+using Trdng.Core.MarketData;
+using Trdng.Core.Instruments;
+using Trdng.Gate.MarketData;
+using Trdng.Mexc.MarketData;
+using Trdng.Mexc.Private;
+using Trdng.Core.Orders;
+using Trdng.Core.Credentials;
+
+namespace Trdng.Desktop.ViewModels;
+
+public partial class MainViewModel : ViewModelBase, IAsyncDisposable
+{
+    private BybitPublicOrderBookClient? _client;
+    private GatePublicMarketDataClient? _gateClient;
+    private MexcPublicOrderBookClient? _mexcClient;
+    private readonly MarketSelectionController _selectionController;
+    private readonly SemaphoreSlim _selectionLifecycleGate = new(1, 1);
+    private Action<OrderBookSnapshot>? _bybitSnapshotHandler;
+    private Action<TradeCluster>? _bybitClusterHandler;
+    private Action<IReadOnlyList<PublicTrade>>? _bybitTradesHandler;
+    private Action<MarketDataConnectionState, string?>? _bybitStateHandler;
+    private Action<OrderBookSnapshot>? _gateSnapshotHandler;
+    private Action<IReadOnlyList<PublicTrade>>? _gateTradesHandler;
+    private Action<MarketDataConnectionState, string?>? _gateStateHandler;
+    private Action<OrderBookSnapshot>? _mexcSnapshotHandler;
+    private Action<MarketDataConnectionState, string?>? _mexcStateHandler;
+    private readonly SelectionGeneration _generation = new();
+    private readonly object _requestSync = new();
+    private string _requestedAsset = "APT";
+    private MarketProduct _requestedProduct = MarketProduct.Perpetual;
+    private long _latestRequestId;
+    private readonly VenueLiquidityTrackers _liquidityTrackers = new();
+    private readonly HttpClient _metadataHttpClient = new()
+    {
+        Timeout = TimeSpan.FromSeconds(5)
+    };
+    private CancellationTokenSource _metadataLifetime = new();
+    private readonly MarketDataFreshnessOptions _freshness;
+    private readonly DispatcherTimer _healthTimer;
+    private OrderBookSnapshot? _latestSnapshot;
+    private DateTimeOffset _latestSnapshotAt;
+    private MarketDataConnectionState _bybitState =
+        MarketDataConnectionState.Connecting;
+    private IReadOnlyDictionary<(LiquiditySide Side, decimal Price), LiquidityLevelState>
+        _latestLiquidity =
+            new Dictionary<(LiquiditySide, decimal), LiquidityLevelState>();
+    private OrderBookSnapshot? _latestGateSnapshot;
+    private DateTimeOffset _latestGateSnapshotAt;
+    private MarketDataConnectionState _gateState =
+        MarketDataConnectionState.Connecting;
+    private MarketDataConnectionState _mexcState =
+        MarketDataConnectionState.Disconnected;
+    private DateTimeOffset _latestMexcSnapshotAt;
+    private OrderBookSnapshot? _latestMexcSnapshot;
+    private IReadOnlyDictionary<(LiquiditySide Side, decimal Price), LiquidityLevelState>
+        _latestMexcLiquidity =
+            new Dictionary<(LiquiditySide, decimal), LiquidityLevelState>();
+    private decimal? _bybitTickSize;
+    private decimal? _gateTickSize;
+    private IReadOnlyDictionary<(LiquiditySide Side, decimal Price), LiquidityLevelState>
+        _latestGateLiquidity =
+            new Dictionary<(LiquiditySide, decimal), LiquidityLevelState>();
+    private int _densityIndex = 1;
+    private int _scaleEligibilityMask = -1;
+    private readonly DryRunOrderFactory _dryRunOrderFactory =
+        new(new ClientOrderIdGenerator());
+    private readonly DryRunAuditTrail _dryRunAudit = new(128);
+    private readonly DryRunConfirmationController _dryRunConfirmation;
+    private MarketOrderIntent? _currentDryRunIntent;
+    private OrderValidationResult? _currentDryRunValidation;
+    private PreparedDryRun? _preparedDryRun;
+    private readonly SimulationOrderStore _simulationStore;
+    private readonly SimulationPlaybackCoordinator _simulationPlayback;
+    private bool _simulationJournalAvailable;
+    private readonly CredentialAudit _credentialAudit;
+    private readonly ICredentialVault _credentialVault;
+    private readonly CredentialRevokeController _credentialRevoke;
+    private CredentialVaultState _mexcCredentialState = CredentialVaultState.NotConfigured;
+    private static readonly CredentialIdentity MexcCredentialIdentity =
+        new(TradingVenue.Mexc, "default");
+    private static readonly int[] DepthOptions = [8, 12, 18, 24];
+    // Every density fits inside one half of the 720px default window.
+    // This prevents the nearest ask/bid row from painting beneath the spread.
+    private static readonly double[] RowHeights = [32, 22, 15, 11];
+    private static readonly double[] TextSizes = [16, 14, 11, 9];
+
+    public MainViewModel() : this(MarketDataFreshnessOptions.ScalpingDefault)
+    {
+    }
+
+    internal MainViewModel(MarketDataFreshnessOptions freshness)
+    {
+        _freshness = freshness ?? throw new ArgumentNullException(nameof(freshness));
+        _credentialAudit = new CredentialAudit(32);
+        ICredentialVault nativeVault = OperatingSystem.IsMacOS()
+            ? new MacOsKeychainCredentialVault()
+            : new UnavailableCredentialVault();
+        _credentialVault = new AuditedCredentialVault(nativeVault, _credentialAudit);
+        _dryRunConfirmation = new(
+            TimeSpan.FromSeconds(8), _dryRunAudit);
+        _credentialRevoke = new(_credentialVault, MexcCredentialIdentity,
+            TimeSpan.FromSeconds(8));
+        (_simulationStore, _simulationJournalAvailable) = CreateSimulationStore();
+        _simulationPlayback = new(_simulationStore);
+        SimulationTimeline = _simulationJournalAvailable
+            ? DescribeRecoveredSimulation(_simulationStore)
+            : "JOURNAL BLOCKED · FAIL CLOSED";
+        _selectionController = new MarketSelectionController(CreateClient);
+        _selectionController.Resetting += OnSelectionResetting;
+        _healthTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(500)
+        };
+        _healthTimer.Tick += HealthTimerOnTick;
+        _healthTimer.Start();
+        _ = InitializeAsync();
+        _ = RefreshCredentialStatusAsync();
+    }
+
+    public ObservableCollection<BookLevelViewModel> Asks { get; } = [];
+
+    public ObservableCollection<BookLevelViewModel> Bids { get; } = [];
+
+    public ObservableCollection<ClusterLevelViewModel> ClusterLevels { get; } = [];
+
+    public ObservableCollection<BookLevelViewModel> GateAsks { get; } = [];
+
+    public ObservableCollection<BookLevelViewModel> GateBids { get; } = [];
+
+    public ObservableCollection<BookLevelViewModel> MexcAsks { get; } = [];
+
+    public ObservableCollection<BookLevelViewModel> MexcBids { get; } = [];
+
+    [ObservableProperty]
+    public partial string ConnectionStatus { get; set; } = "CONNECTING";
+
+    [ObservableProperty]
+    public partial string LastPrice { get; set; } = "—";
+
+    [ObservableProperty]
+    public partial string Spread { get; set; } = "—";
+
+    [ObservableProperty]
+    public partial string ClusterInterval { get; set; } = "15 СЕК";
+
+    [ObservableProperty]
+    public partial string ClusterDelta { get; set; } = "Δ —";
+
+    [ObservableProperty]
+    public partial string GateConnectionStatus { get; set; } = "CONNECTING";
+
+    [ObservableProperty]
+    public partial string GateLastPrice { get; set; } = "—";
+
+    [ObservableProperty]
+    public partial string GateSpread { get; set; } = "—";
+
+    [ObservableProperty]
+    public partial string MexcLastPrice { get; set; } = "—";
+
+    [ObservableProperty]
+    public partial string MexcSpread { get; set; } = "—";
+
+    [ObservableProperty]
+    public partial string ConsensusVerdict { get; set; } = "НЕТ КОНСЕНСУСА";
+
+    [ObservableProperty]
+    public partial string ConsensusColor { get; set; } = "#8B93A1";
+
+    [ObservableProperty]
+    public partial string CrossVenueDivergence { get; set; } =
+        "РАСХОЖДЕНИЕ: ОЖИДАНИЕ";
+
+    [ObservableProperty]
+    public partial string CrossVenueDivergenceColor { get; set; } = "#8B93A1";
+
+    [ObservableProperty]
+    public partial string SharedScaleLabel { get; set; } = "ОБЩАЯ ШКАЛА: —";
+
+    [ObservableProperty]
+    public partial string DepthLabel { get; set; } = "12 УРОВНЕЙ";
+
+    [ObservableProperty]
+    public partial string SelectedAsset { get; set; } = "APT";
+
+    [ObservableProperty]
+    public partial string InstrumentTitle { get; set; } = "APT / USDT · PERPETUAL";
+
+    [ObservableProperty]
+    public partial string ProductLabel { get; set; } = "PERPETUAL";
+
+    [ObservableProperty]
+    public partial string BybitCardTitle { get; set; } = "BYBIT · APTUSDT · PERPETUAL";
+
+    [ObservableProperty]
+    public partial string GateCardTitle { get; set; } = "GATE · APT_USDT · PERPETUAL";
+
+    [ObservableProperty]
+    public partial string MexcConnectionStatus { get; set; } = "UNAVAILABLE";
+
+    [ObservableProperty]
+    public partial string MexcCardTitle { get; set; } = "MEXC · APT_USDT · PERPETUAL";
+
+    [ObservableProperty]
+    public partial string MexcEmptyState { get; set; } = "PUBLIC PERPETUAL НЕ РЕАЛИЗОВАН";
+
+    [ObservableProperty]
+    public partial string GateEmptyState { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    public partial string BybitEmptyState { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    public partial string ActiveDryRunVenue { get; set; } = "GATE";
+
+    [ObservableProperty]
+    public partial string DryRunSideLabel { get; set; } = "BUY MARKET";
+
+    [ObservableProperty]
+    public partial string DryRunValueText { get; set; } = "10";
+
+    [ObservableProperty]
+    public partial string DryRunUnit { get; set; } = "USDT";
+
+    [ObservableProperty]
+    public partial string DryRunPreview { get; set; } = "МОДЕЛИРОВАНИЕ · METADATA REQUIRED";
+
+    [ObservableProperty]
+    public partial string DryRunRoute { get; set; } = "GATE · APT_USDT · PERPETUAL";
+
+    [ObservableProperty]
+    public partial string DryRunRiskState { get; set; } = "STOP · ENGAGED";
+
+    [ObservableProperty]
+    public partial string DryRunLimitLabel { get; set; } =
+        "SIMULATION PROFILE · MAX 10 USDT · MAX 1 BASE";
+
+    [ObservableProperty]
+    public partial string DryRunConfirmationState { get; set; } =
+        "СНАЧАЛА ОТКЛЮЧИТЕ STOP ДЛЯ СИМУЛЯЦИИ";
+
+    [ObservableProperty]
+    public partial string SimulationTimeline { get; set; } = "LIFECYCLE · НЕТ ЗАПИСЕЙ";
+
+    [ObservableProperty]
+    public partial string MexcCredentialStatus { get; set; } = "ПРОВЕРКА KEYCHAIN";
+
+    [ObservableProperty]
+    public partial string MexcPrivateStatus { get; set; } =
+        MexcPrivatePresentation.Masked(MexcPrivateState.NotConfigured);
+
+    [ObservableProperty]
+    public partial string MexcOrderTestStatus { get; set; } =
+        MexcOrderTestPresentation.Masked(MexcOrderTestState.KeyRequired);
+
+    [ObservableProperty]
+    public partial bool CanRevokeMexcCredential { get; set; }
+
+    [ObservableProperty]
+    public partial bool CanConfirmRevokeMexcCredential { get; set; }
+
+    [ObservableProperty]
+    public partial string MexcCredentialAction { get; set; } = "";
+
+    private OrderSide _dryRunSide = OrderSide.Buy;
+
+    public MarketProduct SelectedProduct { get; private set; } = MarketProduct.Perpetual;
+
+    public async Task SelectAssetAsync(string baseAsset)
+    {
+        if (baseAsset is not ("APT" or "BTC"))
+            throw new ArgumentOutOfRangeException(nameof(baseAsset));
+        MarketProduct product;
+        lock (_requestSync)
+        {
+            _requestedAsset = baseAsset;
+            product = _requestedProduct;
+        }
+        await SelectMarketAsync(baseAsset, product).ConfigureAwait(false);
+    }
+
+    public async Task SelectProductAsync(MarketProduct product)
+    {
+        string baseAsset;
+        lock (_requestSync)
+        {
+            _requestedProduct = product;
+            baseAsset = _requestedAsset;
+        }
+        await SelectMarketAsync(baseAsset, product).ConfigureAwait(false);
+    }
+
+    public async Task SelectMarketAsync(string baseAsset, MarketProduct product)
+    {
+        var requestId = Interlocked.Increment(ref _latestRequestId);
+        await _selectionLifecycleGate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            if (requestId != Volatile.Read(ref _latestRequestId)) return;
+            if (!await _selectionController.SelectAsync(baseAsset, product).ConfigureAwait(false)) return;
+            var selected = _selectionController.SelectedInstrument!.Value;
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                SelectedProduct = selected.Product;
+                SelectedAsset = selected.BaseAsset;
+                ApplySelectionLabels(selected);
+            });
+
+            _client = _selectionController.Clients.OfType<BybitPublicOrderBookClient>().SingleOrDefault();
+            _gateClient = _selectionController.Clients.OfType<GatePublicMarketDataClient>().SingleOrDefault();
+            _mexcClient = _selectionController.Clients.OfType<MexcPublicOrderBookClient>().SingleOrDefault();
+            AttachClients();
+            _metadataLifetime = new CancellationTokenSource();
+            _ = LoadInstrumentMetadataSafelyAsync(
+                selected.BaseAsset,
+                selected.Product,
+                _metadataLifetime.Token);
+            foreach (var client in _selectionController.Clients) client.Start();
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                ConnectionStatus = GateConnectionStatus = "UNAVAILABLE";
+                CrossVenueDivergence = "НЕ УДАЛОСЬ ПЕРЕКЛЮЧИТЬ АКТИВ";
+            });
+        }
+        finally { _selectionLifecycleGate.Release(); }
+    }
+
+    public void SelectDryRunVenue(TradingVenue venue)
+    {
+        var instrument = new CanonicalInstrument(SelectedAsset, "USDT", SelectedProduct);
+        var capability = StarterInstrumentCatalog.Find(instrument, venue);
+        if (DryRunCapabilityPolicy.Evaluate(capability) == DryRunCapabilityMode.Denied)
+        {
+            Enum.TryParse<TradingVenue>(ActiveDryRunVenue, true, out var activeVenue);
+            DryRunPreview = DryRunVenueSelectionMessage.Rejected(venue, activeVenue);
+            return;
+        }
+        InvalidateDryRunConfirmation("VENUE CHANGED");
+        ActiveDryRunVenue = venue.ToString().ToUpperInvariant();
+        RefreshDryRunPreview();
+    }
+
+    public void SelectDryRunSide(OrderSide side)
+    {
+        InvalidateDryRunConfirmation("SIDE CHANGED");
+        _dryRunSide = side;
+        var sizing = OrderSizingDefaults.For(side, SelectedAsset, "USDT");
+        DryRunSideLabel = side == OrderSide.Buy ? "BUY MARKET" : "SELL MARKET";
+        DryRunUnit = sizing.Unit;
+        DryRunValueText = sizing.Value.ToString(CultureInfo.InvariantCulture);
+        RefreshDryRunPreview();
+    }
+
+    partial void OnDryRunValueTextChanged(string value)
+    {
+        InvalidateDryRunConfirmation("VALUE CHANGED");
+        RefreshDryRunPreview();
+    }
+
+    private void RefreshDryRunPreview()
+    {
+        _currentDryRunIntent = null;
+        _currentDryRunValidation = null;
+        if (!Enum.TryParse<TradingVenue>(ActiveDryRunVenue, true, out var venue) ||
+            !OrderSizingValueParser.TryParse(DryRunValueText, out var value))
+        {
+            DryRunPreview = "НЕВЕРНОЕ ЧИСЛО";
+            return;
+        }
+        var instrument = new CanonicalInstrument(SelectedAsset, "USDT", SelectedProduct);
+        var mode = OrderSizingDefaults.For(
+            _dryRunSide, instrument.BaseAsset, instrument.QuoteAsset).Mode;
+        var result = _dryRunOrderFactory.Create(
+            venue, instrument, _dryRunSide, mode, value, filters: null);
+        _currentDryRunIntent = result.Intent;
+        _currentDryRunValidation = result.Validation;
+        var capability = StarterInstrumentCatalog.Find(instrument, venue);
+        DryRunRoute = capability is null
+            ? $"{venue} · {instrument.BaseAsset}/{instrument.QuoteAsset} · {ProductLabel}"
+            : $"{venue} · {capability.VenueSymbol} · {ProductLabel}";
+        DryRunPreview = result.Validation.Status switch
+        {
+            OrderValidationStatus.NeedsMetadata =>
+                $"{DryRunSideLabel} · {value} {DryRunUnit} · METADATA REQUIRED",
+            OrderValidationStatus.Blocked => "НЕДОСТУПНО ДЛЯ МОДЕЛИРОВАНИЯ",
+            OrderValidationStatus.Invalid => result.Validation.Message,
+            _ => $"{DryRunSideLabel} · {value} {DryRunUnit} · VALIDATED"
+        };
+    }
+
+    public void DisengageDryRunStop()
+    {
+        _credentialRevoke.Invalidate();
+        _credentialRevoke.UpdateState(_mexcCredentialState, stopEngaged: false);
+        ApplyCredentialRevokePresentation(_credentialRevoke.Presentation);
+        if (!_simulationJournalAvailable)
+        {
+            DryRunConfirmationState = "JOURNAL BLOCKED · STOP ОСТАЁТСЯ ВКЛЮЧЕН";
+            return;
+        }
+        RefreshDryRunPreview();
+        if (_currentDryRunIntent is null)
+        {
+            DryRunConfirmationState = "НЕТ КОРРЕКТНОЙ DRY-RUN КОМАНДЫ";
+            return;
+        }
+        var profile = SimulationProfile(_currentDryRunIntent);
+        if (_dryRunConfirmation.DisengageForSimulation(profile))
+        {
+            _simulationPlayback.SetStop(false);
+            DryRunRiskState = "SAFE · SIMULATION ONLY";
+            DryRunConfirmationState = "МОЖНО ПОДГОТОВИТЬ ТОЛЬКО СИМУЛЯЦИЮ";
+        }
+    }
+
+    public void EngageDryRunStop()
+    {
+        _dryRunConfirmation.EngageKillSwitch();
+        _simulationPlayback.SetStop(true);
+        _preparedDryRun = null;
+        DryRunRiskState = "STOP · ENGAGED";
+        DryRunConfirmationState = "СИМУЛЯЦИЯ ЗАБЛОКИРОВАНА";
+        _credentialRevoke.UpdateState(_mexcCredentialState, stopEngaged: true);
+        ApplyCredentialRevokePresentation(_credentialRevoke.Presentation);
+    }
+
+    public void ArmMexcCredentialRevoke() => ApplyCredentialRevokePresentation(
+        _credentialRevoke.Arm(_dryRunConfirmation.KillSwitchEngaged));
+
+    public async Task ConfirmMexcCredentialRevokeAsync()
+    {
+        var presentation = await _credentialRevoke.ConfirmAsync(
+            _dryRunConfirmation.KillSwitchEngaged);
+        ApplyCredentialRevokePresentation(presentation);
+        await RefreshCredentialStatusAsync();
+    }
+
+    public void PrepareDryRunSimulation()
+    {
+        RefreshDryRunPreview();
+        if (_currentDryRunIntent is null || _currentDryRunValidation is null)
+        {
+            DryRunConfirmationState = "КОМАНДА НЕ ПОДГОТОВЛЕНА";
+            return;
+        }
+        var result = _dryRunConfirmation.Prepare(
+            _currentDryRunIntent,
+            _currentDryRunValidation,
+            SimulationProfile(_currentDryRunIntent),
+            CurrentReferencePrice(_currentDryRunIntent.Venue));
+        _preparedDryRun = result.Candidate;
+        DryRunConfirmationState = result.Status == PrepareStatus.Prepared
+            ? "ПОДГОТОВЛЕНО · ПОДТВЕРДИТЕ СИМУЛЯЦИЮ"
+            : result.Reason;
+    }
+
+    public void ConfirmDryRunSimulation()
+    {
+        if (_preparedDryRun is null || _currentDryRunIntent is null)
+        {
+            DryRunConfirmationState = "НЕТ ДЕЙСТВУЮЩЕГО ПОДТВЕРЖДЕНИЯ";
+            return;
+        }
+        var result = _dryRunConfirmation.Confirm(
+            _preparedDryRun.Token, _currentDryRunIntent);
+        DryRunConfirmationState = result.Reason;
+        if (result.Status == ConfirmationStatus.Confirmed)
+        {
+            if (!_simulationJournalAvailable)
+            {
+                SimulationTimeline = "JOURNAL BLOCKED · СИМУЛЯЦИЯ НЕ ЗАПИСАНА";
+                _preparedDryRun = null;
+                return;
+            }
+            try
+            {
+                _simulationPlayback.ActivateConfirmed(_currentDryRunIntent);
+                SimulationTimeline = $"{_currentDryRunIntent.ClientOrderId} · CONFIRMED";
+                _preparedDryRun = null;
+            }
+            catch (Exception exception) when (IsExpectedJournalFault(exception))
+            {
+                BlockSimulationJournal(exception.Message);
+            }
+        }
+    }
+
+    public void PlayDryRunSimulation()
+    {
+        if (!_simulationJournalAvailable)
+        {
+            SimulationTimeline = "JOURNAL BLOCKED · FAIL CLOSED";
+            return;
+        }
+        if (_simulationPlayback.StopEngaged)
+        {
+            SimulationTimeline = "STOP · ПРОИГРЫВАНИЕ ЗАБЛОКИРОВАНО";
+            return;
+        }
+        if (!_simulationPlayback.HasActivePlayback)
+        {
+            SimulationTimeline = "ПРЕДЫДУЩАЯ ИСТОРИЯ СОХРАНЕНА · ПОДГОТОВЬТЕ ЗАНОВО";
+            return;
+        }
+        try
+        {
+            var record = _simulationPlayback.Play(SimulationScenario.PartialAndFill);
+            SimulationTimeline = record.State == SimulationOrderState.Unknown
+                ? "UNKNOWN · ТРЕБУЕТСЯ СВЕРКА · НЕ ПОВТОРЯТЬ"
+                : $"CONFIRMED → SUBMITTED → ACKNOWLEDGED → PARTIAL → {record.State.ToString().ToUpperInvariant()}";
+        }
+        catch (Exception exception) when (IsExpectedJournalFault(exception))
+        {
+            BlockSimulationJournal(exception.Message);
+        }
+    }
+
+    private static (SimulationOrderStore Store, bool Available) CreateSimulationStore()
+    {
+        try
+        {
+            var root = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            var path = Path.Combine(root, "TRDNG", "simulation-journal.v1.jsonl");
+            return (new SimulationOrderStore(
+                new FileSimulationJournal(path, 256), 128), true);
+        }
+        catch (Exception exception) when (exception is IOException or
+            UnauthorizedAccessException or InvalidDataException or
+            System.Text.Json.JsonException or InvalidOperationException)
+        {
+            return (new SimulationOrderStore(
+                new InMemorySimulationJournal(1), 8), false);
+        }
+    }
+
+    private void InvalidateDryRunConfirmation(string reason)
+    {
+        _dryRunConfirmation.InvalidateConfirmation(reason);
+        _simulationPlayback.InvalidateActive();
+        _preparedDryRun = null;
+        DryRunConfirmationState = _dryRunConfirmation.KillSwitchEngaged
+            ? "СНАЧАЛА ОТКЛЮЧИТЕ STOP ДЛЯ СИМУЛЯЦИИ"
+            : "ИЗМЕНЕНИЕ · ПОДГОТОВЬТЕ СИМУЛЯЦИЮ ЗАНОВО";
+        if (_simulationStore.Orders.Count > 0)
+            SimulationTimeline = "ПРЕДЫДУЩАЯ ИСТОРИЯ СОХРАНЕНА · ПОДГОТОВЬТЕ ЗАНОВО";
+    }
+
+    private void BlockSimulationJournal(string reason)
+    {
+        _simulationJournalAvailable = false;
+        _simulationPlayback.SetStop(true);
+        _dryRunConfirmation.EngageKillSwitch("JOURNAL FAULT");
+        _preparedDryRun = null;
+        DryRunRiskState = "STOP · JOURNAL BLOCKED";
+        DryRunConfirmationState = "FAIL CLOSED · СИМУЛЯЦИЯ НЕДОСТУПНА";
+        SimulationTimeline = $"JOURNAL BLOCKED · {reason}";
+    }
+
+    private static bool IsExpectedJournalFault(Exception exception) =>
+        exception is IOException or UnauthorizedAccessException or
+            InvalidDataException or System.Text.Json.JsonException or
+            InvalidOperationException;
+
+    private static string DescribeRecoveredSimulation(SimulationOrderStore store)
+    {
+        var latest = store.Orders.Values.OrderByDescending(order => order.UpdatedAt).FirstOrDefault();
+        if (latest is null) return "LIFECYCLE · НЕТ ЗАПИСЕЙ";
+        return latest.State == SimulationOrderState.Unknown
+            ? $"{latest.Intent.ClientOrderId} · UNKNOWN · ТРЕБУЕТСЯ СВЕРКА · НЕ ПОВТОРЯТЬ"
+            : $"RECOVERED · {latest.Intent.ClientOrderId} · {latest.State.ToString().ToUpperInvariant()}";
+    }
+
+    private static RiskProfile SimulationProfile(MarketOrderIntent intent) =>
+        new("SIMULATION · 10 USDT CAP", RiskProfileMode.Simulation, true,
+            intent.Venue, intent.Instrument, intent.Side, intent.SizingMode,
+            10m, 1m, TimeSpan.FromSeconds(2));
+
+    private ReferencePrice? CurrentReferencePrice(TradingVenue venue)
+    {
+        var (snapshot, observedAt) = venue switch
+        {
+            TradingVenue.Mexc => (_latestMexcSnapshot, _latestMexcSnapshotAt),
+            TradingVenue.Gate => (_latestGateSnapshot, _latestGateSnapshotAt),
+            TradingVenue.Bybit => (_latestSnapshot, _latestSnapshotAt),
+            _ => (null, default)
+        };
+        return ExecutableReferencePrice.Select(snapshot, _dryRunSide, observedAt);
+    }
+
+    public void ShowMoreDepth()
+    {
+        if (_densityIndex < DepthOptions.Length - 1)
+        {
+            _densityIndex++;
+            RebuildBook();
+        }
+    }
+
+    public void ShowLessDepth()
+    {
+        if (_densityIndex > 0)
+        {
+            _densityIndex--;
+            RebuildBook();
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await _selectionLifecycleGate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            _healthTimer.Stop();
+            _healthTimer.Tick -= HealthTimerOnTick;
+            await _metadataLifetime.CancelAsync();
+            DetachClients();
+            _selectionController.Resetting -= OnSelectionResetting;
+            await _selectionController.DisposeAsync();
+            _metadataLifetime.Dispose();
+            _metadataHttpClient.Dispose();
+        }
+        finally
+        {
+            _selectionLifecycleGate.Release();
+            _selectionLifecycleGate.Dispose();
+        }
+    }
+
+    private void OnSnapshotReceived(OrderBookSnapshot snapshot, long expectedGeneration)
+    {
+        if (!_generation.IsCurrent(expectedGeneration)) return;
+        var liquidity = _liquidityTrackers.Bybit.Observe(snapshot, DateTimeOffset.UtcNow);
+        _latestSnapshot = snapshot;
+        _latestSnapshotAt = DateTimeOffset.UtcNow;
+        _latestLiquidity = liquidity;
+
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (!_generation.IsCurrent(expectedGeneration)) return;
+            RebuildBook();
+            UpdateConsensus(DepthOptions[_densityIndex]);
+            UpdateCrossVenueComparison();
+
+            LastPrice = snapshot.BestBid is { } bid ? FormatPrice(bid) : "—";
+            Spread = snapshot.Spread is { } spread ? FormatPrice(spread) : "—";
+        });
+    }
+
+    private void RebuildBook()
+    {
+        var depth = DepthOptions[_densityIndex];
+        var rowHeight = RowHeights[_densityIndex];
+        var textSize = TextSizes[_densityIndex];
+        var comparableBooks = SharedScaleBookSelection.Select(
+            SelectedProduct,
+            new(_mexcState, _latestMexcSnapshot, _latestMexcSnapshotAt),
+            new(_gateState, _latestGateSnapshot, _latestGateSnapshotAt),
+            new(_bybitState, _latestSnapshot, _latestSnapshotAt),
+            DateTimeOffset.UtcNow,
+            _freshness);
+        var scale = SharedPriceScale.Build(
+            comparableBooks.ElementAtOrDefault(0),
+            comparableBooks.ElementAtOrDefault(1),
+            depth,
+            InstrumentTickSize.Resolve(_bybitTickSize, _gateTickSize));
+        if (scale is null)
+        {
+            Asks.Clear();
+            Bids.Clear();
+            GateAsks.Clear();
+            GateBids.Clear();
+            MexcAsks.Clear();
+            MexcBids.Clear();
+            SharedScaleLabel = "ОБЩАЯ ШКАЛА: —";
+            UpdateConsensus(depth);
+            return;
+        }
+
+        RebuildBybit(scale, rowHeight, textSize);
+        RebuildGate(scale, rowHeight, textSize);
+        RebuildMexc(scale, rowHeight, textSize);
+        UpdateConsensus(depth);
+        DepthLabel = $"{depth} УРОВНЕЙ";
+        var officialTick =
+            InstrumentTickSize.Resolve(_bybitTickSize, _gateTickSize);
+        var source = officialTick == scale.TickSize ? "OFFICIAL" : "FALLBACK";
+        var scaleKind = comparableBooks.Count >= 2 ? "ОБЩАЯ ШКАЛА" : "ШКАЛА ОДНОЙ БИРЖИ";
+        SharedScaleLabel = $"{scaleKind} · TICK {FormatPrice(scale.TickSize)} · {source}";
+    }
+
+    private void RebuildBybit(
+        SharedPriceScale scale,
+        double rowHeight,
+        double textSize)
+    {
+        if (SelectedProduct != MarketProduct.Perpetual ||
+            _latestSnapshot is null ||
+            !SharedScaleBookSelection.IsEligible(_bybitState, _latestSnapshot,
+                _latestSnapshotAt, DateTimeOffset.UtcNow, _freshness))
+        {
+            Asks.Clear();
+            Bids.Clear();
+            return;
+        }
+
+        Replace(
+            Asks,
+            ToViewModels(
+                _latestSnapshot.Asks,
+                scale.Asks.Reverse(),
+                LiquiditySide.Ask,
+                _latestLiquidity,
+                rowHeight,
+                textSize));
+        Replace(
+            Bids,
+            ToViewModels(
+                _latestSnapshot.Bids,
+                scale.Bids,
+                LiquiditySide.Bid,
+                _latestLiquidity,
+                rowHeight,
+                textSize));
+    }
+
+    private void RebuildGate(
+        SharedPriceScale scale,
+        double rowHeight,
+        double textSize)
+    {
+        if (SelectedProduct != MarketProduct.Perpetual ||
+            _latestGateSnapshot is null ||
+            !SharedScaleBookSelection.IsEligible(_gateState, _latestGateSnapshot,
+                _latestGateSnapshotAt, DateTimeOffset.UtcNow, _freshness))
+        {
+            GateAsks.Clear();
+            GateBids.Clear();
+            return;
+        }
+
+        Replace(
+            GateAsks,
+            ToViewModels(
+                _latestGateSnapshot.Asks,
+                scale.Asks.Reverse(),
+                LiquiditySide.Ask,
+                _latestGateLiquidity,
+                rowHeight,
+                textSize));
+        Replace(
+            GateBids,
+            ToViewModels(
+                _latestGateSnapshot.Bids,
+                scale.Bids,
+                LiquiditySide.Bid,
+                _latestGateLiquidity,
+                rowHeight,
+                textSize));
+    }
+
+    private void RebuildMexc(SharedPriceScale scale, double rowHeight, double textSize)
+    {
+        if (SelectedProduct != MarketProduct.Spot ||
+            _latestMexcSnapshot is null ||
+            !SharedScaleBookSelection.IsEligible(_mexcState, _latestMexcSnapshot,
+                _latestMexcSnapshotAt, DateTimeOffset.UtcNow, _freshness))
+        {
+            MexcAsks.Clear();
+            MexcBids.Clear();
+            return;
+        }
+        Replace(MexcAsks, ToViewModels(_latestMexcSnapshot.Asks, scale.Asks.Reverse(),
+            LiquiditySide.Ask, _latestMexcLiquidity, rowHeight, textSize));
+        Replace(MexcBids, ToViewModels(_latestMexcSnapshot.Bids, scale.Bids,
+            LiquiditySide.Bid, _latestMexcLiquidity, rowHeight, textSize));
+    }
+
+    private void OnGateSnapshotReceived(OrderBookSnapshot snapshot, long expectedGeneration)
+    {
+        if (!_generation.IsCurrent(expectedGeneration)) return;
+        _latestGateSnapshot = snapshot;
+        _latestGateSnapshotAt = DateTimeOffset.UtcNow;
+        _latestGateLiquidity =
+            _liquidityTrackers.Gate.Observe(snapshot, DateTimeOffset.UtcNow);
+
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (!_generation.IsCurrent(expectedGeneration)) return;
+            RebuildBook();
+            UpdateCrossVenueComparison();
+            GateLastPrice =
+                snapshot.BestBid is { } bid ? FormatPrice(bid) : "—";
+            GateSpread =
+                snapshot.Spread is { } spread ? FormatPrice(spread) : "—";
+        });
+    }
+
+    private void OnMexcSnapshotReceived(OrderBookSnapshot snapshot, long expectedGeneration)
+    {
+        if (!_generation.IsCurrent(expectedGeneration)) return;
+        _latestMexcSnapshot = snapshot;
+        _latestMexcSnapshotAt = DateTimeOffset.UtcNow;
+        _latestMexcLiquidity = _liquidityTrackers.Mexc.Observe(snapshot, _latestMexcSnapshotAt);
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (!_generation.IsCurrent(expectedGeneration)) return;
+            RebuildBook();
+            MexcLastPrice = snapshot.BestBid is { } bid ? FormatPrice(bid) : "—";
+            MexcSpread = snapshot.Spread is { } spread ? FormatPrice(spread) : "—";
+            UpdateConsensus(DepthOptions[_densityIndex]);
+            UpdateCrossVenueComparison();
+        });
+    }
+
+    private void OnMexcStateChanged(
+        MarketDataConnectionState state,
+        string? detail,
+        long expectedGeneration)
+    {
+        if (!_generation.IsCurrent(expectedGeneration)) return;
+        _mexcState = state;
+        if (state is MarketDataConnectionState.WaitingForSnapshot or
+            MarketDataConnectionState.Reconnecting or MarketDataConnectionState.Disconnected)
+        {
+            _liquidityTrackers.Mexc.Reset();
+            _latestMexcSnapshot = null;
+        }
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (!_generation.IsCurrent(expectedGeneration)) return;
+            MexcConnectionStatus = FormatConnectionState(state, _latestMexcSnapshotAt);
+            RebuildBook();
+            UpdateCrossVenueComparison();
+        });
+    }
+
+    private void OnGateTradesReceived(IReadOnlyList<PublicTrade> trades, long expectedGeneration)
+    {
+        if (_generation.IsCurrent(expectedGeneration)) _liquidityTrackers.Gate.ObserveTrades(trades);
+    }
+
+    private void OnGateStateChanged(
+        MarketDataConnectionState state,
+        string? detail,
+        long expectedGeneration)
+    {
+        if (!_generation.IsCurrent(expectedGeneration)) return;
+        _gateState = state;
+        if (state is MarketDataConnectionState.WaitingForSnapshot or
+            MarketDataConnectionState.Reconnecting or
+            MarketDataConnectionState.Disconnected)
+        {
+            _liquidityTrackers.Gate.Reset();
+            _latestGateSnapshot = null;
+        }
+
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (!_generation.IsCurrent(expectedGeneration)) return;
+            GateConnectionStatus = FormatConnectionState(state);
+            RebuildBook();
+            UpdateCrossVenueComparison();
+        });
+    }
+
+    private void OnTradesReceived(IReadOnlyList<PublicTrade> trades, long expectedGeneration)
+    {
+        if (_generation.IsCurrent(expectedGeneration)) _liquidityTrackers.Bybit.ObserveTrades(trades);
+    }
+
+    private void OnStateChanged(
+        MarketDataConnectionState state,
+        string? detail,
+        long expectedGeneration)
+    {
+        if (!_generation.IsCurrent(expectedGeneration)) return;
+        _bybitState = state;
+        if (state is MarketDataConnectionState.WaitingForSnapshot or
+            MarketDataConnectionState.Reconnecting or
+            MarketDataConnectionState.Disconnected)
+        {
+            _liquidityTrackers.Bybit.Reset();
+            _latestSnapshot = null;
+        }
+
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (!_generation.IsCurrent(expectedGeneration)) return;
+            ConnectionStatus = FormatConnectionState(state);
+            RebuildBook();
+            UpdateCrossVenueComparison();
+        });
+    }
+
+    private string FormatConnectionState(
+        MarketDataConnectionState state,
+        DateTimeOffset? lastSnapshotAt = null) =>
+        VenueCardStatus.Resolve(state, lastSnapshotAt, DateTimeOffset.UtcNow, _freshness);
+
+    private void UpdateConsensus(int depth)
+    {
+        var eligible = ConsensusBookSelection.Select(
+            SelectedProduct,
+            [
+                new("MEXC", MarketProduct.Spot, _mexcState,
+                    _latestMexcSnapshot, _latestMexcSnapshotAt),
+                new("GATE", MarketProduct.Perpetual, _gateState,
+                    _latestGateSnapshot, _latestGateSnapshotAt),
+                new("BYBIT", MarketProduct.Perpetual, _bybitState,
+                    _latestSnapshot, _latestSnapshotAt)
+            ],
+            DateTimeOffset.UtcNow,
+            _freshness);
+        var signals = eligible.SelectMany(candidate => CollectSignals(
+            candidate.Venue,
+            candidate.Book,
+            candidate.Venue switch
+            {
+                "MEXC" => _latestMexcLiquidity,
+                "GATE" => _latestGateLiquidity,
+                _ => _latestLiquidity
+            },
+            depth));
+        var verdict = CrossVenueConsensus.Evaluate(signals);
+        (ConsensusVerdict, ConsensusColor) = verdict.Consensus switch
+        {
+            MarketConsensus.Bullish => ("ЭВРИСТИКА: ПЕРЕВЕС BID", "#65DCA2"),
+            MarketConsensus.Bearish => ("ЭВРИСТИКА: ПЕРЕВЕС ASK", "#FF7A86"),
+            MarketConsensus.Mixed => ("ЭВРИСТИКА: СМЕШАННО", "#F5C96A"),
+            _ => ("ЭВРИСТИКА: НЕТ ДАННЫХ", "#8B93A1")
+        };
+    }
+
+    private void HealthTimerOnTick(object? sender, EventArgs eventArgs)
+    {
+        var now = DateTimeOffset.UtcNow;
+        ConnectionStatus = SelectedProduct == MarketProduct.Spot
+            ? "UNAVAILABLE"
+            : FormatConnectionState(_bybitState, _latestSnapshotAt);
+        GateConnectionStatus = SelectedProduct == MarketProduct.Spot
+            ? "UNAVAILABLE"
+            : FormatConnectionState(_gateState, _latestGateSnapshotAt);
+        MexcConnectionStatus = SelectedProduct == MarketProduct.Spot
+            ? FormatConnectionState(_mexcState, _latestMexcSnapshotAt)
+            : "UNAVAILABLE";
+        var eligibilityMask = GetScaleEligibilityMask(now);
+        if (eligibilityMask != _scaleEligibilityMask)
+        {
+            _scaleEligibilityMask = eligibilityMask;
+            RebuildBook();
+        }
+        UpdateCrossVenueComparison();
+    }
+
+    private int GetScaleEligibilityMask(DateTimeOffset now)
+    {
+        var mask = 0;
+        if (SelectedProduct == MarketProduct.Spot && SharedScaleBookSelection.IsEligible(
+                _mexcState, _latestMexcSnapshot, _latestMexcSnapshotAt, now, _freshness))
+            mask |= 1;
+        if (SelectedProduct == MarketProduct.Perpetual && SharedScaleBookSelection.IsEligible(
+                _gateState, _latestGateSnapshot, _latestGateSnapshotAt, now, _freshness))
+            mask |= 2;
+        if (SelectedProduct == MarketProduct.Perpetual && SharedScaleBookSelection.IsEligible(
+                _bybitState, _latestSnapshot, _latestSnapshotAt, now, _freshness))
+            mask |= 4;
+        return mask;
+    }
+
+    private async Task LoadInstrumentMetadataAsync(
+        string baseAsset,
+        MarketProduct product,
+        CancellationToken token)
+    {
+        if (product == MarketProduct.Spot)
+        {
+            try
+            {
+                var metadata = await new MexcInstrumentMetadataClient(_metadataHttpClient)
+                    .GetSpotAsync($"{baseAsset}USDT", token).ConfigureAwait(false);
+                _bybitTickSize = metadata.TickSize;
+            }
+            catch (Exception exception) when (
+                exception is HttpRequestException or TaskCanceledException or
+                InvalidDataException or System.Text.Json.JsonException or FormatException)
+            {
+                _bybitTickSize = null;
+            }
+            if (!token.IsCancellationRequested) Dispatcher.UIThread.Post(RebuildBook);
+            return;
+        }
+
+        var bybit = new BybitInstrumentMetadataClient(_metadataHttpClient);
+        var gate = new GateInstrumentMetadataClient(_metadataHttpClient);
+
+        try
+        {
+            _bybitTickSize = await bybit.GetLinearTickSizeAsync(
+                $"{baseAsset}USDT",
+                token).ConfigureAwait(false);
+        }
+        catch (Exception exception) when (
+            exception is HttpRequestException or TaskCanceledException or
+            InvalidDataException or System.Text.Json.JsonException or
+            FormatException)
+        {
+            _bybitTickSize = null;
+        }
+
+        try
+        {
+            _gateTickSize = await gate.GetTickSizeAsync(
+                $"{baseAsset}_USDT",
+                token).ConfigureAwait(false);
+        }
+        catch (Exception exception) when (
+            exception is HttpRequestException or TaskCanceledException or
+            InvalidDataException or System.Text.Json.JsonException or
+            FormatException)
+        {
+            _gateTickSize = null;
+        }
+
+        if (!token.IsCancellationRequested)
+        {
+            Dispatcher.UIThread.Post(RebuildBook);
+        }
+    }
+
+    private async Task InitializeAsync()
+    {
+        try { await SelectAssetAsync("APT").ConfigureAwait(false); }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            await Dispatcher.UIThread.InvokeAsync(() =>
+                ConnectionStatus = GateConnectionStatus = "UNAVAILABLE");
+        }
+    }
+
+    private async Task RefreshCredentialStatusAsync()
+    {
+        try
+        {
+            var result = await _credentialVault.GetStatusAsync(MexcCredentialIdentity);
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                MexcCredentialStatus = CredentialStatusPresentation.ToMaskedText(result.State);
+                _mexcCredentialState = result.State;
+                _credentialRevoke.UpdateState(result.State,
+                    _dryRunConfirmation.KillSwitchEngaged);
+                ApplyCredentialRevokePresentation(_credentialRevoke.Presentation);
+            });
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                MexcCredentialStatus = "ОШИБКА KEYCHAIN";
+                CanRevokeMexcCredential = false;
+                CanConfirmRevokeMexcCredential = false;
+                MexcCredentialAction = "ОШИБКА KEYCHAIN";
+            });
+        }
+    }
+
+    private void ApplyCredentialRevokePresentation(CredentialRevokePresentation presentation)
+    {
+        CanRevokeMexcCredential = presentation.CanArm;
+        CanConfirmRevokeMexcCredential = presentation.CanConfirm;
+        MexcCredentialAction = presentation.MaskedMessage;
+    }
+
+    private async Task LoadInstrumentMetadataSafelyAsync(
+        string baseAsset,
+        MarketProduct product,
+        CancellationToken token)
+    {
+        try { await LoadInstrumentMetadataAsync(baseAsset, product, token).ConfigureAwait(false); }
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { }
+        catch (ObjectDisposedException) when (token.IsCancellationRequested) { }
+    }
+
+    private void UpdateCrossVenueComparison()
+    {
+        if (SelectedProduct == MarketProduct.Spot)
+        {
+            (CrossVenueDivergence, CrossVenueDivergenceColor) =
+                ("СРАВНЕНИЕ: НУЖНЫ 2 ДОСТУПНЫЕ БИРЖИ", "#8B93A1");
+            return;
+        }
+        var result = CrossVenueBookComparison.Evaluate(
+            new VenueBookObservation(
+                "BYBIT",
+                _bybitState,
+                _latestSnapshot,
+                _latestSnapshotAt),
+            new VenueBookObservation(
+                "GATE",
+                _gateState,
+                _latestGateSnapshot,
+                _latestGateSnapshotAt),
+            DateTimeOffset.UtcNow,
+            _freshness);
+
+        (CrossVenueDivergence, CrossVenueDivergenceColor) = result.Status switch
+        {
+            CrossVenueComparisonStatus.Ready when result.HigherVenue is null =>
+                ($"РАСХОЖДЕНИЕ {result.DivergenceBasisPoints:0.00} BP · ЦЕНЫ РАВНЫ",
+                    "#65DCA2"),
+            CrossVenueComparisonStatus.Ready =>
+                ($"РАСХОЖДЕНИЕ {result.DivergenceBasisPoints:0.00} BP · " +
+                    $"{result.HigherVenue} ВЫШЕ",
+                    result.DivergenceBasisPoints >= 5 ? "#F5C96A" : "#D8DDE5"),
+            CrossVenueComparisonStatus.Warning =>
+                ($"ЗАДЕРЖКА > {_freshness.WarningAfter.TotalMilliseconds:0} MS · " +
+                    $"РАСХОЖДЕНИЕ {result.DivergenceBasisPoints:0.00} BP",
+                    "#F5C96A"),
+            CrossVenueComparisonStatus.Stale =>
+                ("РАСХОЖДЕНИЕ: УСТАРЕВШИЕ ДАННЫЕ", "#FF9CA6"),
+            CrossVenueComparisonStatus.NotLive =>
+                ("РАСХОЖДЕНИЕ: ОДНА ИЗ БИРЖ НЕ В LIVE", "#8B93A1"),
+            _ => ("РАСХОЖДЕНИЕ: НЕТ ПОЛНОГО СТАКАНА", "#8B93A1")
+        };
+    }
+
+    private void ApplySelectionLabels(CanonicalInstrument selected)
+    {
+        InvalidateDryRunConfirmation("MARKET SELECTION CHANGED");
+        var product = selected.Product == MarketProduct.Spot ? "SPOT" : "PERPETUAL";
+        var cards = VenueCardLayout.Build(selected);
+        var mexc = cards.Single(card => card.Venue == TradingVenue.Mexc);
+        var gate = cards.Single(card => card.Venue == TradingVenue.Gate);
+        var bybit = cards.Single(card => card.Venue == TradingVenue.Bybit);
+        InstrumentTitle = $"{selected.BaseAsset} / {selected.QuoteAsset} · {product}";
+        ProductLabel = product;
+        MexcCardTitle = $"MEXC · {mexc.Symbol} · {product}";
+        GateCardTitle = $"GATE · {gate.Symbol} · {product}";
+        BybitCardTitle = $"BYBIT · {bybit.Symbol} · {product}";
+        MexcEmptyState = mexc.EmptyState;
+        GateEmptyState = gate.EmptyState;
+        BybitEmptyState = bybit.EmptyState;
+        if (selected.Product == MarketProduct.Perpetual)
+        {
+            ConnectionStatus = GateConnectionStatus = "CONNECTING";
+            MexcConnectionStatus = "UNAVAILABLE";
+        }
+        else
+        {
+            ConnectionStatus = GateConnectionStatus = "UNAVAILABLE";
+            MexcConnectionStatus = "CONNECTING";
+        }
+        var preferredVenue = selected.Product == MarketProduct.Spot
+            ? TradingVenue.Mexc
+            : TradingVenue.Gate;
+        ActiveDryRunVenue = preferredVenue.ToString().ToUpperInvariant();
+        DryRunUnit = _dryRunSide == OrderSide.Buy ? "USDT" : selected.BaseAsset;
+        RefreshDryRunPreview();
+    }
+
+    private IPublicMarketDataClient CreateClient(VenueInstrumentCapability capability)
+    {
+        var isBtc = capability.Instrument.BaseAsset == "BTC";
+        return capability.Venue switch
+        {
+            TradingVenue.Bybit => new BybitPublicOrderBookClient(
+                capability.VenueSymbol,
+                clusterPriceStep: isBtc ? 0.5m : 0.0005m),
+            TradingVenue.Gate => new GatePublicMarketDataClient(
+                capability.VenueSymbol,
+                contractMultiplier: isBtc ? 0.0001m : 0.1m,
+                clusterPriceStep: isBtc ? 0.5m : 0.0005m),
+            TradingVenue.Mexc when capability.Instrument.Product == MarketProduct.Spot =>
+                new MexcPublicOrderBookClient(
+                    _metadataHttpClient,
+                    capability.VenueSymbol),
+            _ => throw new InvalidOperationException(
+                $"{capability.Venue} is not supported on the Perpetual screen.")
+        };
+    }
+
+    private void AttachClients()
+    {
+        if (_client is not null)
+        {
+            var generation = _generation.Current;
+            _bybitSnapshotHandler = value => OnSnapshotReceived(value, generation);
+            _bybitClusterHandler = value => OnClusterReceived(value, generation);
+            _bybitTradesHandler = value => OnTradesReceived(value, generation);
+            _bybitStateHandler = (state, detail) => OnStateChanged(state, detail, generation);
+            _client.SnapshotReceived += _bybitSnapshotHandler;
+            _client.ClusterReceived += _bybitClusterHandler;
+            _client.TradesReceived += _bybitTradesHandler;
+            _client.StateChanged += _bybitStateHandler;
+        }
+        if (_gateClient is not null)
+        {
+            var generation = _generation.Current;
+            _gateSnapshotHandler = value => OnGateSnapshotReceived(value, generation);
+            _gateTradesHandler = value => OnGateTradesReceived(value, generation);
+            _gateStateHandler = (state, detail) => OnGateStateChanged(state, detail, generation);
+            _gateClient.SnapshotReceived += _gateSnapshotHandler;
+            _gateClient.TradesReceived += _gateTradesHandler;
+            _gateClient.StateChanged += _gateStateHandler;
+        }
+        if (_mexcClient is not null)
+        {
+            var generation = _generation.Current;
+            _mexcSnapshotHandler = value => OnMexcSnapshotReceived(value, generation);
+            _mexcStateHandler = (state, detail) => OnMexcStateChanged(state, detail, generation);
+            _mexcClient.SnapshotReceived += _mexcSnapshotHandler;
+            _mexcClient.StateChanged += _mexcStateHandler;
+        }
+    }
+
+    private void DetachClients()
+    {
+        if (_client is not null)
+        {
+            if (_bybitSnapshotHandler is not null) _client.SnapshotReceived -= _bybitSnapshotHandler;
+            if (_bybitClusterHandler is not null) _client.ClusterReceived -= _bybitClusterHandler;
+            if (_bybitTradesHandler is not null) _client.TradesReceived -= _bybitTradesHandler;
+            if (_bybitStateHandler is not null) _client.StateChanged -= _bybitStateHandler;
+        }
+        if (_gateClient is not null)
+        {
+            if (_gateSnapshotHandler is not null) _gateClient.SnapshotReceived -= _gateSnapshotHandler;
+            if (_gateTradesHandler is not null) _gateClient.TradesReceived -= _gateTradesHandler;
+            if (_gateStateHandler is not null) _gateClient.StateChanged -= _gateStateHandler;
+        }
+        if (_mexcClient is not null)
+        {
+            if (_mexcSnapshotHandler is not null) _mexcClient.SnapshotReceived -= _mexcSnapshotHandler;
+            if (_mexcStateHandler is not null) _mexcClient.StateChanged -= _mexcStateHandler;
+        }
+        _client = null;
+        _gateClient = null;
+        _mexcClient = null;
+        _bybitSnapshotHandler = null;
+        _bybitClusterHandler = null;
+        _bybitTradesHandler = null;
+        _bybitStateHandler = null;
+        _gateSnapshotHandler = null;
+        _gateTradesHandler = null;
+        _gateStateHandler = null;
+        _mexcSnapshotHandler = null;
+        _mexcStateHandler = null;
+    }
+
+    private void OnSelectionResetting()
+    {
+        var resetGeneration = _generation.Next();
+        DetachClients();
+        _metadataLifetime.Cancel();
+        _metadataLifetime.Dispose();
+        _liquidityTrackers.ResetAll();
+        _latestSnapshot = null;
+        _latestGateSnapshot = null;
+        _latestMexcSnapshot = null;
+        _latestSnapshotAt = default;
+        _latestGateSnapshotAt = default;
+        _latestMexcSnapshotAt = default;
+        _latestLiquidity = new Dictionary<(LiquiditySide, decimal), LiquidityLevelState>();
+        _latestGateLiquidity = new Dictionary<(LiquiditySide, decimal), LiquidityLevelState>();
+        _latestMexcLiquidity = new Dictionary<(LiquiditySide, decimal), LiquidityLevelState>();
+        _bybitTickSize = null;
+        _gateTickSize = null;
+        _bybitState = MarketDataConnectionState.Connecting;
+        _gateState = MarketDataConnectionState.Connecting;
+        _mexcState = MarketDataConnectionState.Disconnected;
+        _scaleEligibilityMask = -1;
+
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (!_generation.IsCurrent(resetGeneration)) return;
+            Asks.Clear();
+            Bids.Clear();
+            GateAsks.Clear();
+            GateBids.Clear();
+            MexcAsks.Clear();
+            MexcBids.Clear();
+            ClusterLevels.Clear();
+            LastPrice = GateLastPrice = MexcLastPrice = Spread = GateSpread = MexcSpread = "—";
+            ConnectionStatus = GateConnectionStatus = "CONNECTING";
+            SharedScaleLabel = "ОБЩАЯ ШКАЛА: —";
+            ConsensusVerdict = "ЭВРИСТИКА: НЕТ ДАННЫХ";
+            ConsensusColor = "#8B93A1";
+            UpdateCrossVenueComparison();
+        });
+    }
+
+    private static IEnumerable<VenueLiquiditySignal> CollectSignals(
+        string venue,
+        OrderBookSnapshot? snapshot,
+        IReadOnlyDictionary<(LiquiditySide Side, decimal Price), LiquidityLevelState>
+            liquidity,
+        int depth)
+    {
+        if (snapshot is null)
+        {
+            return [];
+        }
+
+        var result = new List<VenueLiquiditySignal>();
+        Add(snapshot.Bids.Take(depth), LiquiditySide.Bid);
+        Add(snapshot.Asks.Take(depth), LiquiditySide.Ask);
+        return result;
+
+        void Add(IEnumerable<OrderBookLevel> levels, LiquiditySide side)
+        {
+            var visible = levels.ToArray();
+            if (visible.Length == 0)
+            {
+                return;
+            }
+            var ordered = visible.Select(level => level.Quantity).Order().ToArray();
+            var median = ordered[ordered.Length / 2];
+            var threshold = decimal.Max(median * 4, ordered[^1] * 0.35m);
+            foreach (var level in visible.Where(level => level.Quantity >= threshold))
+            {
+                if (liquidity.TryGetValue((side, level.Price), out var state))
+                {
+                    result.Add(new VenueLiquiditySignal(
+                        venue,
+                        side,
+                        state.Behavior,
+                        level.Quantity));
+                }
+            }
+        }
+    }
+
+    private void OnClusterReceived(TradeCluster cluster, long expectedGeneration)
+    {
+        if (!_generation.IsCurrent(expectedGeneration)) return;
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (!_generation.IsCurrent(expectedGeneration)) return;
+            Replace(
+                ClusterLevels,
+                cluster.Levels.Take(14).Select(ToViewModel));
+            ClusterDelta = $"Δ {cluster.Delta:+0.####;-0.####;0}";
+            ClusterInterval = $"{cluster.Interval.TotalSeconds:0} СЕК";
+        });
+    }
+
+    private static IEnumerable<BookLevelViewModel> ToViewModels(
+        IEnumerable<OrderBookLevel> source,
+        IEnumerable<decimal> priceScale,
+        LiquiditySide side,
+        IReadOnlyDictionary<(LiquiditySide Side, decimal Price), LiquidityLevelState> liquidity,
+        double rowHeight,
+        double textSize)
+    {
+        var levelsByPrice = source.ToDictionary(
+            static level => level.Price,
+            static level => level);
+        var prices = priceScale.ToArray();
+        var levels = prices
+            .Where(levelsByPrice.ContainsKey)
+            .Select(price => levelsByPrice[price])
+            .ToArray();
+        if (prices.Length == 0)
+        {
+            return [];
+        }
+
+        var quantities = levels
+            .Select(level => level.Quantity)
+            .Order()
+            .ToArray();
+        var maximum = quantities.Length == 0 ? 0 : quantities[^1];
+        var median = quantities.Length == 0
+            ? 0
+            : quantities[quantities.Length / 2];
+        var significanceThreshold = decimal.Max(median * 4, maximum * 0.35m);
+
+        return prices.Select(price =>
+        {
+            if (!levelsByPrice.TryGetValue(price, out var level))
+            {
+                return new BookLevelViewModel(
+                    FormatPrice(price),
+                    string.Empty,
+                    0,
+                    "#5E6570",
+                    string.Empty,
+                    string.Empty,
+                    "#8B93A1",
+                    "#00000000",
+                    rowHeight,
+                    textSize,
+                    Math.Max(10, textSize - 2),
+                    0.28);
+            }
+
+            // Square-root scaling preserves the hierarchy without allowing one
+            // unusually large wall to flatten every smaller visible level.
+            var normalized = maximum == 0
+                ? 0
+                : Math.Sqrt((double)(level.Quantity / maximum));
+            var isSignificant =
+                level.Quantity >= significanceThreshold &&
+                level.Quantity > median;
+            var behavior = liquidity.TryGetValue((side, level.Price), out var state)
+                ? state.Behavior
+                : LiquidityBehavior.Normal;
+            var (behaviorText, behaviorColor, behaviorBackground) = behavior switch
+            {
+                LiquidityBehavior.Building =>
+                    ("+ ДОБАВЛЯЮТ", "#FFD977", "#503C2F12"),
+                LiquidityBehavior.Holding =>
+                    ("ДЕРЖАТ", "#D8DDE5", "#403A414C"),
+                LiquidityBehavior.Pulling =>
+                    ("− СНИМАЮТ", "#FF9CA6", "#503F151B"),
+                LiquidityBehavior.Absorbing =>
+                    ("ПОГЛОЩАЮТ", "#85F0BA", "#50305522"),
+                _ => (string.Empty, "#8B93A1", "#00000000")
+            };
+
+            return new BookLevelViewModel(
+                FormatPrice(level.Price),
+                level.Quantity.ToString("0.####", CultureInfo.InvariantCulture),
+                28 + (normalized * 360),
+                isSignificant ? "#FFFFFF" : "#D7DBE2",
+                isSignificant ? "◆" : string.Empty,
+                isSignificant ? behaviorText : string.Empty,
+                behaviorColor,
+                isSignificant ? behaviorBackground : "#00000000",
+                rowHeight,
+                textSize,
+                Math.Max(10, textSize - 2),
+                1);
+        });
+    }
+
+    private static ClusterLevelViewModel ToViewModel(ClusterLevel level)
+    {
+        var total = level.TotalVolume;
+        var imbalance = total == 0
+            ? 0
+            : decimal.Abs(level.Delta) / total * 100;
+
+        return new ClusterLevelViewModel(
+            FormatPrice(level.Price),
+            level.BidVolume.ToString("0.####", CultureInfo.InvariantCulture),
+            level.AskVolume.ToString("0.####", CultureInfo.InvariantCulture),
+            $"{imbalance:0}%");
+    }
+
+    private static void Replace<T>(
+        ObservableCollection<T> target,
+        IEnumerable<T> source)
+    {
+        target.Clear();
+
+        foreach (var item in source)
+        {
+            target.Add(item);
+        }
+    }
+
+    private static string FormatPrice(decimal price) =>
+        price < 10
+            ? price.ToString("0.0000", CultureInfo.InvariantCulture)
+            : price.ToString("N1", CultureInfo.InvariantCulture);
+}

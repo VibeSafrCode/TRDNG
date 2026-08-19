@@ -1,0 +1,34 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  trdng-build-and-test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      AVALONIA_TELEMETRY_OPTOUT: "1"
+      TRDNG_LIVE_TESTS: "0"
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Install .NET from global.json
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          global-json-file: global.json
+      - name: Restore
+        run: dotnet restore Trdng.slnx
+      - name: Build
+        run: dotnet build Trdng.slnx --configuration Release --no-restore
+      - name: Test deterministic suite
+        run: dotnet test tests/Trdng.Core.Tests/Trdng.Core.Tests.csproj --configuration Release --no-build --no-restore
