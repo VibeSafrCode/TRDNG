@@ -24,11 +24,11 @@ public sealed class MacOsKeychainCredentialVault : ICredentialVault
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (!OperatingSystem.IsMacOS()) return ValueTask.FromResult(Unavailable());
         if (!CredentialIdentityPolicy.IsValid(identity))
             return ValueTask.FromResult(InvalidIdentity());
         if (secret.IsEmpty || secret.Length > MaxSecretBytes) return ValueTask.FromResult(
             new CredentialVaultResult(CredentialVaultState.Denied, "SECRET SIZE DENIED"));
+        if (!OperatingSystem.IsMacOS()) return ValueTask.FromResult(Unavailable());
 
         var copy = secret.ToArray();
         try

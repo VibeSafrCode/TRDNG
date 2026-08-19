@@ -1,7 +1,10 @@
+using System.Text.Json.Serialization;
+
 namespace Trdng.Core.Instruments;
 
 public readonly record struct CanonicalInstrument
 {
+    [JsonConstructor]
     public CanonicalInstrument(
         string baseAsset,
         string quoteAsset,

@@ -126,7 +126,7 @@ public sealed class DryRunOrderModelTests
     [Theory]
     [InlineData(10, 5, OrderValidationStatus.Valid)]
     [InlineData(11, 5, OrderValidationStatus.Invalid)]
-    [InlineData(10, -1, OrderValidationStatus.Invalid)]
+    [InlineData(10, -1, OrderValidationStatus.NeedsMetadata)]
     public void ValidatesOptionalQuoteNotionalStep(
         int value, int step, OrderValidationStatus expected)
     {

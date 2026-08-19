@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Headers;
+using System.Security.Cryptography;
 using System.Text;
 using Trdng.Core.Credentials;
 using Trdng.Mexc.Private;
@@ -9,12 +10,45 @@ namespace Trdng.Core.Tests.Mexc;
 public sealed class MexcPrivateFoundationTests
 {
     [Fact]
-    public void OfficialHmacVectorMatches()
+    public void HmacMatchesIndependentComputationForContradictoryDocumentationVector()
     {
         const string query = "symbol=BTCUSDT&side=BUY&type=LIMIT&quantity=1&price=11&recvWindow=5000&timestamp=1644489390087";
+        var secret = Encoding.UTF8.GetBytes("45d0b3c26f2644f19bfb98b07741b2f5");
         var signature = MexcHmacSigner.Sign(
-            Encoding.UTF8.GetBytes("45d0b3c26f2644f19bfb98b07741b2f5"), query);
-        Assert.Equal("323c96ab85a745712e95e63cad28903dd8292e4a905e99c4ee3932023843a117", signature);
+            secret, query);
+        var independent = ManualHmacSha256(secret, Encoding.UTF8.GetBytes(query));
+        // The official page checked 2026-08-19 prints two contradictory signatures
+        // for this input. Cryptographic recomputation agrees with fd3e..., not 323c....
+        Assert.Equal("fd3e4e8543c5188531eb7279d68ae7d26a573d0fc5ab0d18eb692451654d837a",
+            signature);
+        Assert.Equal(independent, signature);
+    }
+
+    private static string ManualHmacSha256(byte[] key, byte[] message)
+    {
+        const int blockSize = 64;
+        var normalized = key.Length > blockSize ? SHA256.HashData(key) : key.ToArray();
+        Array.Resize(ref normalized, blockSize);
+        var innerPad = new byte[blockSize];
+        var outerPad = new byte[blockSize];
+        for (var index = 0; index < blockSize; index++)
+        {
+            innerPad[index] = (byte)(normalized[index] ^ 0x36);
+            outerPad[index] = (byte)(normalized[index] ^ 0x5c);
+        }
+        var innerInput = innerPad.Concat(message).ToArray();
+        var innerHash = SHA256.HashData(innerInput);
+        var outerInput = outerPad.Concat(innerHash).ToArray();
+        try { return Convert.ToHexStringLower(SHA256.HashData(outerInput)); }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(normalized);
+            CryptographicOperations.ZeroMemory(innerPad);
+            CryptographicOperations.ZeroMemory(outerPad);
+            CryptographicOperations.ZeroMemory(innerInput);
+            CryptographicOperations.ZeroMemory(innerHash);
+            CryptographicOperations.ZeroMemory(outerInput);
+        }
     }
 
     [Fact]
