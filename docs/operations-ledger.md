@@ -8,15 +8,14 @@
 
 | Gate | Состояние | Evidence / причина |
 |---|---|---|
-| Backup | NOT RUN | Разрешение Founder на backup не предоставлено |
-| Restore verification | NOT RUN | Backup отсутствует; разрешение на restore не предоставлено |
-| Local Git metadata | VERIFIED | Branch `main`; HEAD `0d8ed0b` |
-| Baseline commit | VERIFIED | `dbb7fc1` — `chore: establish TRDNG stage 1 baseline` |
-| S1.5 commit | VERIFIED | `f1ab367` — `feat: complete stage 1 three-venue books` |
-| S2.1 commit | VERIFIED | `0d8ed0b` — `feat: add dry-run market order model` |
-| S2.2 commit | PENDING AUDIT CLOSURE | S2.2 changes остаются uncommitted |
-| Rollback reference | VERIFIED / NOT EXECUTED | Baseline перед S2.2: `0d8ed0b`; это не backup, откат не выполнялся |
-| GitHub / push | NOT RUN | Remote не настроен; публикация не выполнялась |
+| External archive | VERIFIED | 12 MiB; directory comparison PASS |
+| Pre-separation Git bundle | VERIFIED COMPLETE | Full bundle verified before clean recreation |
+| Restore verification | NOT RUN | Recovery artifacts exist; restore procedure not executed |
+| Repository root | VERIFIED | `5780ef66b20143e918e1d88399bfe985b0c1287e` |
+| Current main / origin | VERIFIED | `3e9d9e2cfc1ab0c3dffc54aa6cb3646e4c374966`; worktree clean |
+| GitHub publication | VERIFIED | Private, no-license terminal repository published |
+| CI acceptance | VERIFIED | Run `32235655100`: Release build PASS; official tests 245/245 PASS |
+| Older sprint commit IDs | PRE-SEPARATION LOCAL HISTORY | IDs in older evidence documents are preserved by the verified bundle and are not ancestors of the recreated root |
 | Tag / release | NOT RUN | Не разрешены; проверяемых идентификаторов нет |
 
 ## Формат backup-записи

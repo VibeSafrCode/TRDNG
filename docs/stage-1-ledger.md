@@ -313,3 +313,13 @@ Baseline зафиксирован: 2026-08-02 11:31 +05:00.
   `88f11ba796b8855953c5fec241a47c313ed51dd9`; worktree clean after commit; no
   GitHub/push. Runtime VSTest, authenticated smoke, GUI and real-key evidence
   remain open.
+
+## Terminal repository publication — ACCEPTED
+
+- Private, no-license repository recreated from terminal-only root
+  `5780ef66b20143e918e1d88399bfe985b0c1287e`.
+- Portable deterministic-test fix published at
+  `3e9d9e2cfc1ab0c3dffc54aa6cb3646e4c374966`.
+- CI run `32235655100`: Release build PASS; official tests 245/245 PASS.
+- Fresh-clone excluded path/content scans: zero; worktree clean.
+- Recovery evidence exists externally; restore remains NOT RUN.
