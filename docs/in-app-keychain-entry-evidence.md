@@ -58,4 +58,18 @@ status indicators.
   `0cd39cebff2f7536096e393fab2d8c00490e370d`, pushed to private `main`.
 - Official GitHub CI run `32373293894`: PASS; Release build PASS and full
   deterministic suite `254/254` passed, 0 failed, 0 skipped.
-- GUI, authenticated private requests and real-key smoke remain NOT RUN.
+- Authenticated private requests remain NOT RUN.
+
+## Masked user verification
+
+- Through the accepted in-app masked UI, both credential profiles now report
+  `СОХРАНЕНО В KEYCHAIN`: `READ-ONLY` and `ORDER TEST`. No credential values,
+  lengths or partial values were recorded.
+- The fresh exact packaged app with signed executable SHA-256
+  `56190f245471e79bafd477a12aa9412b0d0ac9f7ec3e54f8bc98a2acf425e4d1`
+  launched successfully; the form and sidebar scrolling worked.
+- Catalog and book runtime acceptance was environment-limited, not passed: DNS
+  was restricted in this launch (`curl api.mexc.com: Could not resolve host`).
+  This is recorded as an environment limitation, not a product failure.
+- No authenticated/private call, `/order/test` request, production order or
+  money action occurred. The app was closed after verification.
