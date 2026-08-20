@@ -1,6 +1,6 @@
 # In-app Keychain entry — implementation evidence
 
-Date: 2026-08-20. Status: `IMPLEMENTED / SECURITY AUDIT OPEN`.
+Date: 2026-08-20. Status: `ACCEPTED / PUBLISHED`.
 
 ## User result and boundary
 
@@ -51,7 +51,11 @@ rollback both items if it changed, mask API-key fields as well as secret fields,
 keep revoke controls coherent with STOP, and restore passive masked private-path
 status indicators.
 
-## Open gates
+## Acceptance and publication
 
-- Independent security review and GitHub official full test run remain open.
-- The diff is deliberately uncommitted. No remote write was performed.
+- Independent repeat security/code audit: ACCEPTED.
+- Accepted implementation commit:
+  `0cd39cebff2f7536096e393fab2d8c00490e370d`, pushed to private `main`.
+- Official GitHub CI run `32373293894`: PASS; Release build PASS and full
+  deterministic suite `254/254` passed, 0 failed, 0 skipped.
+- GUI, authenticated private requests and real-key smoke remain NOT RUN.
