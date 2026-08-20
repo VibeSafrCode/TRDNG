@@ -9,23 +9,23 @@
   <Window.Resources>
     <DataTemplate x:Key="AskRow" x:DataType="vm:BookLevelViewModel">
       <Grid Height="{Binding RowHeight}" Opacity="{Binding RowOpacity}">
-        <Border Width="{Binding VisualWidth}" HorizontalAlignment="Right" Background="#663B171E" />
+        <Border Width="{Binding VisualWidth}" HorizontalAlignment="Right" Background="#66FF453A" />
         <Grid Margin="10,0" ColumnDefinitions="12,Auto,*,Auto">
-          <TextBlock Text="{Binding SignificanceMarker}" Foreground="#FF6B78" VerticalAlignment="Center" />
+          <TextBlock Text="{Binding SignificanceMarker}" Foreground="#FF8A80" VerticalAlignment="Center" />
           <TextBlock Grid.Column="1" Text="{Binding Quantity}" FontSize="{Binding TextSize}" FontWeight="SemiBold" VerticalAlignment="Center" />
           <TextBlock Grid.Column="2" Text="{Binding Behavior}" Foreground="{Binding BehaviorColor}" FontSize="{Binding BehaviorTextSize}" FontWeight="Bold" Margin="6,0" VerticalAlignment="Center" />
-          <TextBlock Grid.Column="3" Text="{Binding Price}" Foreground="#F19A9A" FontSize="{Binding TextSize}" VerticalAlignment="Center" />
+          <TextBlock Grid.Column="3" Text="{Binding Price}" Foreground="#FF8A80" FontSize="{Binding TextSize}" VerticalAlignment="Center" />
         </Grid>
       </Grid>
     </DataTemplate>
     <DataTemplate x:Key="BidRow" x:DataType="vm:BookLevelViewModel">
       <Grid Height="{Binding RowHeight}" Opacity="{Binding RowOpacity}">
-        <Border Width="{Binding VisualWidth}" HorizontalAlignment="Left" Background="#66305225" />
+        <Border Width="{Binding VisualWidth}" HorizontalAlignment="Left" Background="#6630D158" />
         <Grid Margin="10,0" ColumnDefinitions="12,Auto,*,Auto">
-          <TextBlock Text="{Binding SignificanceMarker}" Foreground="#56D89B" VerticalAlignment="Center" />
+          <TextBlock Text="{Binding SignificanceMarker}" Foreground="#5DE47A" VerticalAlignment="Center" />
           <TextBlock Grid.Column="1" Text="{Binding Quantity}" FontSize="{Binding TextSize}" FontWeight="SemiBold" VerticalAlignment="Center" />
           <TextBlock Grid.Column="2" Text="{Binding Behavior}" Foreground="{Binding BehaviorColor}" FontSize="{Binding BehaviorTextSize}" FontWeight="Bold" Margin="6,0" VerticalAlignment="Center" />
-          <TextBlock Grid.Column="3" Text="{Binding Price}" Foreground="#8ED6B0" FontSize="{Binding TextSize}" VerticalAlignment="Center" />
+          <TextBlock Grid.Column="3" Text="{Binding Price}" Foreground="#5DE47A" FontSize="{Binding TextSize}" VerticalAlignment="Center" />
         </Grid>
       </Grid>
     </DataTemplate>
@@ -65,6 +65,21 @@
             <Button Content="APT / USDT" Click="SelectApt_Click" Padding="8,7" />
             <Button Grid.Column="1" Content="BTC / USDT" Click="SelectBtc_Click" Padding="8,7" />
           </Grid>
+          <TextBox Text="{Binding InstrumentSearchText, Mode=TwoWay}"
+                   PlaceholderText="Быстрый поиск пары" />
+          <TextBlock Text="{Binding CatalogState}" Foreground="#8B93A1"
+                     FontSize="9" TextWrapping="Wrap" />
+          <ListBox ItemsSource="{Binding InstrumentSearchResults}"
+                   MaxHeight="150" ScrollViewer.VerticalScrollBarVisibility="Auto"
+                   ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+            <ListBox.ItemTemplate>
+              <DataTemplate>
+                <Button Content="{Binding}" Tag="{Binding}"
+                        Click="SelectCatalogInstrument_Click"
+                        HorizontalContentAlignment="Left" Padding="6,4" />
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
           <Border Background="#15181D" CornerRadius="6" Padding="10" Margin="0,12,0,0">
             <StackPanel Spacing="7">
               <TextBlock Text="ГЛУБИНА" Foreground="#8B93A1" FontSize="10" />

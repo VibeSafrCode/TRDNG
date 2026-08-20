@@ -342,3 +342,18 @@ Baseline зафиксирован: 2026-08-02 11:31 +05:00.
   Official GitHub CI `32373293894`: build PASS; tests 254/254 PASS, 0 failed,
   0 skipped. GUI/authenticated private requests/real-key smoke remain NOT RUN.
 - Evidence: [`in-app-keychain-entry-evidence.md`](in-app-keychain-entry-evidence.md).
+
+## S1.6 dynamic catalogs + book contrast — IMPLEMENTED / AUDIT OPEN
+
+- Credential-free official MEXC Spot and Gate/Bybit USDT Perpetual catalogs now
+  drive one bounded canonical search and exact per-venue availability.
+- Search is capped at 40 results; product isolation, exact symbols,
+  latest-selection lifecycle and unsupported cards remain fail closed.
+- Public SOL/USDT smoke: MEXC Spot plus Gate/Bybit Perpetual catalogs and 5×5
+  books PASS. No credentials/private/auth/trading action.
+- Requested six ask/bid template colors applied; quantity remains white.
+- Test assembly and final Release build: PASS, 0 warnings/errors. The one local
+  official VSTest attempt hit the known IPC blocker and was not retried.
+- Existing app republished once; DLL SHA-256
+  `494f69ae16b78a3dfac8a7b7a1f6d28e0db1363ef597cfd213c377383922a596`;
+  strict codesign PASS. Evidence: [`s1.6-evidence.md`](s1.6-evidence.md).

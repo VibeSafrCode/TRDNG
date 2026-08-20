@@ -152,6 +152,40 @@ public sealed class MarketSelectionControllerTests
         Assert.Equal(CapabilityAvailability.Blocked, capability.Trading);
     }
 
+    [Fact]
+    public async Task DynamicResolverCreatesOnlyExactOfficialVenueSymbols()
+    {
+        var instrument = new CanonicalInstrument("SOL", "USDT", MarketProduct.Perpetual);
+        var catalog = new PublicInstrumentCatalog();
+        catalog.Replace([
+            new(instrument, TradingVenue.Bybit, "SOLUSDT", 0.001m),
+            new(instrument, TradingVenue.Gate, "SOL_USDT", 0.001m, 1m)]);
+        await using var controller = new MarketSelectionController(
+            capability => new FakeClient(capability.Venue, capability.VenueSymbol), catalog.Find);
+
+        Assert.True(await controller.SelectAsync("SOL", "USDT", MarketProduct.Perpetual));
+        Assert.Equal(["SOLUSDT", "SOL_USDT"], controller.Clients
+            .Cast<FakeClient>().Select(client => client.Symbol).ToArray());
+        Assert.DoesNotContain(controller.Clients.Cast<FakeClient>(),
+            client => client.TradingVenue == TradingVenue.Mexc);
+    }
+
+    [Fact]
+    public async Task UnsupportedDynamicInstrumentCreatesNoClientWithoutGuessing()
+    {
+        var catalog = new PublicInstrumentCatalog();
+        var supported = new CanonicalInstrument("APT", "USDT", MarketProduct.Perpetual);
+        catalog.Replace([new(supported, TradingVenue.Bybit, "APTUSDT", 0.001m)]);
+        await using var controller = new MarketSelectionController(
+            capability => new FakeClient(capability.Venue, capability.VenueSymbol), catalog.Find);
+        Assert.True(await controller.SelectAsync("APT", "USDT", MarketProduct.Perpetual));
+        var existing = controller.Clients.Single();
+        Assert.False(await controller.SelectAsync("SOL", "USDT", MarketProduct.Perpetual));
+        Assert.Same(existing, controller.Clients.Single());
+        Assert.False(((FakeClient)existing).Disposed);
+        Assert.Equal(supported, controller.SelectedInstrument);
+    }
+
     private sealed class FakeClient : IPublicMarketDataClient
     {
         private readonly Func<Task>? _onDispose;

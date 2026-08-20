@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Trdng.Core.Instruments;
 
 namespace Trdng.Bybit.MarketData;
 
@@ -19,6 +20,58 @@ public sealed class BybitInstrumentMetadataClient(HttpClient httpClient)
         var json = await httpClient.GetByteArrayAsync(uri, cancellationToken)
             .ConfigureAwait(false);
         return ParseTickSize(json, symbol);
+    }
+
+    public async Task<IReadOnlyList<PublicCatalogEntry>> GetLinearPerpetualCatalogAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var entries = new List<PublicCatalogEntry>();
+        var cursor = string.Empty;
+        for (var page = 0; page < 20; page++)
+        {
+            var suffix = string.IsNullOrEmpty(cursor) ? string.Empty :
+                $"&cursor={Uri.EscapeDataString(cursor)}";
+            var json = await httpClient.GetByteArrayAsync(
+                new Uri($"{Endpoint}?category=linear&status=Trading&limit=1000{suffix}"),
+                cancellationToken).ConfigureAwait(false);
+            var parsed = ParseCatalogPage(json);
+            entries.AddRange(parsed.Entries);
+            if (string.IsNullOrEmpty(parsed.NextCursor)) return entries;
+            if (parsed.NextCursor == cursor)
+                throw new InvalidDataException("Bybit catalog cursor did not advance.");
+            cursor = parsed.NextCursor;
+        }
+        throw new InvalidDataException("Bybit catalog exceeded pagination bound.");
+    }
+
+    public static (IReadOnlyList<PublicCatalogEntry> Entries, string NextCursor)
+        ParseCatalogPage(ReadOnlyMemory<byte> utf8Json)
+    {
+        using var document = JsonDocument.Parse(utf8Json);
+        if (document.RootElement.GetProperty("retCode").GetInt32() != 0)
+            throw new InvalidDataException("Bybit rejected catalog request.");
+        var result = document.RootElement.GetProperty("result");
+        var entries = new List<PublicCatalogEntry>();
+        foreach (var item in result.GetProperty("list").EnumerateArray())
+        {
+            if (item.GetProperty("status").GetString() != "Trading" ||
+                item.GetProperty("contractType").GetString() != "LinearPerpetual" ||
+                item.GetProperty("quoteCoin").GetString() != "USDT" ||
+                item.GetProperty("settleCoin").GetString() != "USDT") continue;
+            var baseAsset = item.GetProperty("baseCoin").GetString();
+            var quoteAsset = item.GetProperty("quoteCoin").GetString();
+            var symbol = item.GetProperty("symbol").GetString();
+            var tickText = item.GetProperty("priceFilter").GetProperty("tickSize").GetString();
+            if (baseAsset is null || quoteAsset is null || symbol is null ||
+                !decimal.TryParse(tickText, NumberStyles.AllowDecimalPoint,
+                    CultureInfo.InvariantCulture, out var tick) || tick <= 0)
+                throw new InvalidDataException("Bybit catalog entry is incomplete.");
+            entries.Add(new(new(baseAsset, quoteAsset, MarketProduct.Perpetual),
+                TradingVenue.Bybit, symbol, tick));
+        }
+        var next = result.TryGetProperty("nextPageCursor", out var cursor)
+            ? cursor.GetString() ?? string.Empty : string.Empty;
+        return (entries, next);
     }
 
     public static decimal ParseTickSize(

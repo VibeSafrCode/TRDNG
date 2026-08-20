@@ -20,6 +20,10 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
     private GatePublicMarketDataClient? _gateClient;
     private MexcPublicOrderBookClient? _mexcClient;
     private readonly MarketSelectionController _selectionController;
+    private readonly PublicInstrumentCatalog _publicCatalog = new();
+    private DateTimeOffset? _catalogLoadedAt;
+    private string _catalogBaseState = "КАТАЛОГ · ЗАГРУЗКА";
+    private static readonly TimeSpan CatalogMaxAge = TimeSpan.FromMinutes(15);
     private readonly SemaphoreSlim _selectionLifecycleGate = new(1, 1);
     private Action<OrderBookSnapshot>? _bybitSnapshotHandler;
     private Action<TradeCluster>? _bybitClusterHandler;
@@ -31,9 +35,6 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
     private Action<OrderBookSnapshot>? _mexcSnapshotHandler;
     private Action<MarketDataConnectionState, string?>? _mexcStateHandler;
     private readonly SelectionGeneration _generation = new();
-    private readonly object _requestSync = new();
-    private string _requestedAsset = "APT";
-    private MarketProduct _requestedProduct = MarketProduct.Perpetual;
     private long _latestRequestId;
     private readonly VenueLiquidityTrackers _liquidityTrackers = new();
     private readonly HttpClient _metadataHttpClient = new()
@@ -114,7 +115,7 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
         SimulationTimeline = _simulationJournalAvailable
             ? DescribeRecoveredSimulation(_simulationStore)
             : "JOURNAL BLOCKED · FAIL CLOSED";
-        _selectionController = new MarketSelectionController(CreateClient);
+        _selectionController = new MarketSelectionController(CreateClient, _publicCatalog.Find);
         _selectionController.Resetting += OnSelectionResetting;
         _healthTimer = new DispatcherTimer
         {
@@ -191,6 +192,17 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
 
     [ObservableProperty]
     public partial string SelectedAsset { get; set; } = "APT";
+
+    [ObservableProperty]
+    public partial string SelectedQuote { get; set; } = "USDT";
+
+    [ObservableProperty]
+    public partial string InstrumentSearchText { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    public partial string CatalogState { get; set; } = "КАТАЛОГ · ЗАГРУЗКА";
+
+    public ObservableCollection<string> InstrumentSearchResults { get; } = [];
 
     [ObservableProperty]
     public partial string InstrumentTitle { get; set; } = "APT / USDT · PERPETUAL";
@@ -313,41 +325,60 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
 
     public async Task SelectAssetAsync(string baseAsset)
     {
-        if (baseAsset is not ("APT" or "BTC"))
-            throw new ArgumentOutOfRangeException(nameof(baseAsset));
-        MarketProduct product;
-        lock (_requestSync)
-        {
-            _requestedAsset = baseAsset;
-            product = _requestedProduct;
-        }
-        await SelectMarketAsync(baseAsset, product).ConfigureAwait(false);
+        await SelectMarketAsync(baseAsset, "USDT", SelectedProduct).ConfigureAwait(false);
+    }
+
+    public Task SelectInstrumentAsync(string pairId)
+    {
+        var parts = pairId.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length != 2) throw new ArgumentException("Invalid pair id.", nameof(pairId));
+        return SelectMarketAsync(parts[0], parts[1], SelectedProduct);
     }
 
     public async Task SelectProductAsync(MarketProduct product)
     {
-        string baseAsset;
-        lock (_requestSync)
+        if (!PublicCatalogFreshness.IsFresh(
+                _catalogLoadedAt, DateTimeOffset.UtcNow, CatalogMaxAge))
         {
-            _requestedProduct = product;
-            baseAsset = _requestedAsset;
+            CatalogState = "КАТАЛОГ · УСТАРЕЛ";
+            return;
         }
-        await SelectMarketAsync(baseAsset, product).ConfigureAwait(false);
+        var current = new CanonicalInstrument(SelectedAsset, SelectedQuote, SelectedProduct);
+        var target = CatalogSelectionPolicy.ChooseForProduct(_publicCatalog, current, product);
+        RefreshCatalogSearch(product);
+        if (target is null)
+        {
+            CatalogState = "КАТАЛОГ · НЕТ ИНСТРУМЕНТОВ ДЛЯ ПРОДУКТА";
+            return;
+        }
+        await SelectMarketAsync(target.Value.BaseAsset, target.Value.QuoteAsset, product)
+            .ConfigureAwait(false);
     }
 
     public async Task SelectMarketAsync(string baseAsset, MarketProduct product)
+        => await SelectMarketAsync(baseAsset, "USDT", product).ConfigureAwait(false);
+
+    public async Task SelectMarketAsync(string baseAsset, string quoteAsset, MarketProduct product)
     {
+        if (!PublicCatalogFreshness.IsFresh(
+                _catalogLoadedAt, DateTimeOffset.UtcNow, CatalogMaxAge))
+        {
+            await Dispatcher.UIThread.InvokeAsync(() => CatalogState = "КАТАЛОГ · УСТАРЕЛ");
+            return;
+        }
         var requestId = Interlocked.Increment(ref _latestRequestId);
         await _selectionLifecycleGate.WaitAsync().ConfigureAwait(false);
         try
         {
             if (requestId != Volatile.Read(ref _latestRequestId)) return;
-            if (!await _selectionController.SelectAsync(baseAsset, product).ConfigureAwait(false)) return;
+            if (!await _selectionController.SelectAsync(baseAsset, quoteAsset, product).ConfigureAwait(false)) return;
+            if (requestId != Volatile.Read(ref _latestRequestId)) return;
             var selected = _selectionController.SelectedInstrument!.Value;
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
                 SelectedProduct = selected.Product;
                 SelectedAsset = selected.BaseAsset;
+                SelectedQuote = selected.QuoteAsset;
                 ApplySelectionLabels(selected);
             });
 
@@ -358,6 +389,7 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
             _metadataLifetime = new CancellationTokenSource();
             _ = LoadInstrumentMetadataSafelyAsync(
                 selected.BaseAsset,
+                selected.QuoteAsset,
                 selected.Product,
                 _metadataLifetime.Token);
             foreach (var client in _selectionController.Clients) client.Start();
@@ -375,7 +407,7 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
 
     public void SelectDryRunVenue(TradingVenue venue)
     {
-        var instrument = new CanonicalInstrument(SelectedAsset, "USDT", SelectedProduct);
+        var instrument = new CanonicalInstrument(SelectedAsset, SelectedQuote, SelectedProduct);
         var capability = StarterInstrumentCatalog.Find(instrument, venue);
         if (DryRunCapabilityPolicy.Evaluate(capability) == DryRunCapabilityMode.Denied)
         {
@@ -392,7 +424,7 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
     {
         InvalidateDryRunConfirmation("SIDE CHANGED");
         _dryRunSide = side;
-        var sizing = OrderSizingDefaults.For(side, SelectedAsset, "USDT");
+        var sizing = OrderSizingDefaults.For(side, SelectedAsset, SelectedQuote);
         DryRunSideLabel = side == OrderSide.Buy ? "BUY MARKET" : "SELL MARKET";
         DryRunUnit = sizing.Unit;
         DryRunValueText = sizing.Value.ToString(CultureInfo.InvariantCulture);
@@ -405,6 +437,9 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
         RefreshDryRunPreview();
     }
 
+    partial void OnInstrumentSearchTextChanged(string value) =>
+        RefreshCatalogSearch(SelectedProduct);
+
     private void RefreshDryRunPreview()
     {
         _currentDryRunIntent = null;
@@ -415,7 +450,7 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
             DryRunPreview = "НЕВЕРНОЕ ЧИСЛО";
             return;
         }
-        var instrument = new CanonicalInstrument(SelectedAsset, "USDT", SelectedProduct);
+        var instrument = new CanonicalInstrument(SelectedAsset, SelectedQuote, SelectedProduct);
         var mode = OrderSizingDefaults.For(
             _dryRunSide, instrument.BaseAsset, instrument.QuoteAsset).Mode;
         var result = _dryRunOrderFactory.Create(
@@ -1000,8 +1035,12 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
             ? "UNAVAILABLE"
             : FormatConnectionState(_gateState, _latestGateSnapshotAt);
         MexcConnectionStatus = SelectedProduct == MarketProduct.Spot
-            ? FormatConnectionState(_mexcState, _latestMexcSnapshotAt)
+            ? (_mexcClient is null ? "UNAVAILABLE" : FormatConnectionState(_mexcState, _latestMexcSnapshotAt))
             : "UNAVAILABLE";
+        if (_client is null) ConnectionStatus = "UNAVAILABLE";
+        if (_gateClient is null) GateConnectionStatus = "UNAVAILABLE";
+        if (!PublicCatalogFreshness.IsFresh(_catalogLoadedAt, now, CatalogMaxAge))
+            CatalogState = "КАТАЛОГ · УСТАРЕЛ";
         var eligibilityMask = GetScaleEligibilityMask(now);
         if (eligibilityMask != _scaleEligibilityMask)
         {
@@ -1026,74 +1065,91 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
         return mask;
     }
 
-    private async Task LoadInstrumentMetadataAsync(
+    private Task LoadInstrumentMetadataAsync(
         string baseAsset,
+        string quoteAsset,
         MarketProduct product,
         CancellationToken token)
     {
-        if (product == MarketProduct.Spot)
-        {
-            try
-            {
-                var metadata = await new MexcInstrumentMetadataClient(_metadataHttpClient)
-                    .GetSpotAsync($"{baseAsset}USDT", token).ConfigureAwait(false);
-                _bybitTickSize = metadata.TickSize;
-            }
-            catch (Exception exception) when (
-                exception is HttpRequestException or TaskCanceledException or
-                InvalidDataException or System.Text.Json.JsonException or FormatException)
-            {
-                _bybitTickSize = null;
-            }
-            if (!token.IsCancellationRequested) Dispatcher.UIThread.Post(RebuildBook);
-            return;
-        }
-
-        var bybit = new BybitInstrumentMetadataClient(_metadataHttpClient);
-        var gate = new GateInstrumentMetadataClient(_metadataHttpClient);
-
-        try
-        {
-            _bybitTickSize = await bybit.GetLinearTickSizeAsync(
-                $"{baseAsset}USDT",
-                token).ConfigureAwait(false);
-        }
-        catch (Exception exception) when (
-            exception is HttpRequestException or TaskCanceledException or
-            InvalidDataException or System.Text.Json.JsonException or
-            FormatException)
-        {
-            _bybitTickSize = null;
-        }
-
-        try
-        {
-            _gateTickSize = await gate.GetTickSizeAsync(
-                $"{baseAsset}_USDT",
-                token).ConfigureAwait(false);
-        }
-        catch (Exception exception) when (
-            exception is HttpRequestException or TaskCanceledException or
-            InvalidDataException or System.Text.Json.JsonException or
-            FormatException)
-        {
-            _gateTickSize = null;
-        }
-
-        if (!token.IsCancellationRequested)
-        {
-            Dispatcher.UIThread.Post(RebuildBook);
-        }
+        token.ThrowIfCancellationRequested();
+        var instrument = new CanonicalInstrument(baseAsset, quoteAsset, product);
+        _bybitTickSize = product == MarketProduct.Spot
+            ? _publicCatalog.TickSize(instrument, TradingVenue.Mexc)
+            : _publicCatalog.TickSize(instrument, TradingVenue.Bybit);
+        _gateTickSize = product == MarketProduct.Perpetual
+            ? _publicCatalog.TickSize(instrument, TradingVenue.Gate) : null;
+        Dispatcher.UIThread.Post(RebuildBook);
+        return Task.CompletedTask;
     }
 
     private async Task InitializeAsync()
     {
-        try { await SelectAssetAsync("APT").ConfigureAwait(false); }
+        try
+        {
+            await LoadPublicCatalogsAsync().ConfigureAwait(false);
+            var initial = CatalogSelectionPolicy.ChooseInitial(_publicCatalog)
+                ?? throw new InvalidDataException("Public catalog union is empty.");
+            await SelectMarketAsync(initial.BaseAsset, initial.QuoteAsset, initial.Product)
+                .ConfigureAwait(false);
+        }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             await Dispatcher.UIThread.InvokeAsync(() =>
-                ConnectionStatus = GateConnectionStatus = "UNAVAILABLE");
+            {
+                ConnectionStatus = GateConnectionStatus = "UNAVAILABLE";
+                CatalogState = "КАТАЛОГ · ОШИБКА";
+            });
         }
+    }
+
+    private async Task LoadPublicCatalogsAsync()
+    {
+        var tasks = new[]
+        {
+            LoadCatalogSafelyAsync(() => new MexcInstrumentMetadataClient(_metadataHttpClient)
+                .GetSpotCatalogAsync()),
+            LoadCatalogSafelyAsync(() => new GateInstrumentMetadataClient(_metadataHttpClient)
+                .GetUsdtPerpetualCatalogAsync()),
+            LoadCatalogSafelyAsync(() => new BybitInstrumentMetadataClient(_metadataHttpClient)
+                .GetLinearPerpetualCatalogAsync())
+        };
+        var catalogs = await Task.WhenAll(tasks).ConfigureAwait(false);
+        var entries = catalogs.SelectMany(result => result).ToArray();
+        if (entries.Length == 0) throw new InvalidDataException("Public catalogs are unavailable.");
+        _publicCatalog.Replace(entries);
+        _catalogLoadedAt = DateTimeOffset.UtcNow;
+        await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            _catalogBaseState = catalogs.All(result => result.Count != 0)
+                ? "КАТАЛОГ · ГОТОВ" : "КАТАЛОГ · ЧАСТИЧНО ДОСТУПЕН";
+            CatalogState = _catalogBaseState;
+            RefreshCatalogSearch(SelectedProduct);
+        });
+    }
+
+    private static async Task<IReadOnlyList<PublicCatalogEntry>> LoadCatalogSafelyAsync(
+        Func<Task<IReadOnlyList<PublicCatalogEntry>>> load)
+    {
+        try { return await load().ConfigureAwait(false); }
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException or
+            InvalidDataException or System.Text.Json.JsonException or FormatException)
+        { return []; }
+    }
+
+    private void RefreshCatalogSearch(MarketProduct product)
+    {
+        InstrumentSearchResults.Clear();
+        foreach (var instrument in _publicCatalog.Search(product, InstrumentSearchText))
+            InstrumentSearchResults.Add(instrument.PairId);
+        if (!PublicCatalogFreshness.IsFresh(
+                _catalogLoadedAt, DateTimeOffset.UtcNow, CatalogMaxAge))
+        {
+            CatalogState = _catalogLoadedAt is null
+                ? "КАТАЛОГ · ЗАГРУЗКА" : "КАТАЛОГ · УСТАРЕЛ";
+            return;
+        }
+        CatalogState = InstrumentSearchResults.Count == 0 && !_catalogBaseState.Contains("ЗАГРУЗКА")
+            ? "КАТАЛОГ · НИЧЕГО НЕ НАЙДЕНО" : _catalogBaseState;
     }
 
     private async Task RefreshCredentialStatusAsync()
@@ -1175,10 +1231,11 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
 
     private async Task LoadInstrumentMetadataSafelyAsync(
         string baseAsset,
+        string quoteAsset,
         MarketProduct product,
         CancellationToken token)
     {
-        try { await LoadInstrumentMetadataAsync(baseAsset, product, token).ConfigureAwait(false); }
+        try { await LoadInstrumentMetadataAsync(baseAsset, quoteAsset, product, token).ConfigureAwait(false); }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { }
         catch (ObjectDisposedException) when (token.IsCancellationRequested) { }
     }
@@ -1230,7 +1287,7 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
     {
         InvalidateDryRunConfirmation("MARKET SELECTION CHANGED");
         var product = selected.Product == MarketProduct.Spot ? "SPOT" : "PERPETUAL";
-        var cards = VenueCardLayout.Build(selected);
+        var cards = VenueCardLayout.Build(selected, _publicCatalog.Find);
         var mexc = cards.Single(card => card.Venue == TradingVenue.Mexc);
         var gate = cards.Single(card => card.Venue == TradingVenue.Gate);
         var bybit = cards.Single(card => card.Venue == TradingVenue.Bybit);
@@ -1244,34 +1301,39 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
         BybitEmptyState = bybit.EmptyState;
         if (selected.Product == MarketProduct.Perpetual)
         {
-            ConnectionStatus = GateConnectionStatus = "CONNECTING";
+            ConnectionStatus = bybit.MarketDataAvailable ? "CONNECTING" : "UNAVAILABLE";
+            GateConnectionStatus = gate.MarketDataAvailable ? "CONNECTING" : "UNAVAILABLE";
             MexcConnectionStatus = "UNAVAILABLE";
         }
         else
         {
             ConnectionStatus = GateConnectionStatus = "UNAVAILABLE";
-            MexcConnectionStatus = "CONNECTING";
+            MexcConnectionStatus = mexc.MarketDataAvailable ? "CONNECTING" : "UNAVAILABLE";
         }
         var preferredVenue = selected.Product == MarketProduct.Spot
             ? TradingVenue.Mexc
             : TradingVenue.Gate;
         ActiveDryRunVenue = preferredVenue.ToString().ToUpperInvariant();
-        DryRunUnit = _dryRunSide == OrderSide.Buy ? "USDT" : selected.BaseAsset;
+        DryRunUnit = _dryRunSide == OrderSide.Buy ? selected.QuoteAsset : selected.BaseAsset;
         RefreshDryRunPreview();
     }
 
     private IPublicMarketDataClient CreateClient(VenueInstrumentCapability capability)
     {
-        var isBtc = capability.Instrument.BaseAsset == "BTC";
+        var metadata = _publicCatalog.Get(capability.Instrument, capability.Venue)
+            ?? throw new InvalidOperationException("Official catalog entry is missing.");
         return capability.Venue switch
         {
             TradingVenue.Bybit => new BybitPublicOrderBookClient(
                 capability.VenueSymbol,
-                clusterPriceStep: isBtc ? 0.5m : 0.0005m),
+                clusterPriceStep: metadata.TickSize ??
+                    throw new InvalidOperationException("Official Bybit tick is missing.")),
             TradingVenue.Gate => new GatePublicMarketDataClient(
                 capability.VenueSymbol,
-                contractMultiplier: isBtc ? 0.0001m : 0.1m,
-                clusterPriceStep: isBtc ? 0.5m : 0.0005m),
+                contractMultiplier: metadata.QuantityMultiplier ??
+                    throw new InvalidOperationException("Official Gate multiplier is missing."),
+                clusterPriceStep: metadata.TickSize ??
+                    throw new InvalidOperationException("Official Gate tick is missing.")),
             TradingVenue.Mexc when capability.Instrument.Product == MarketProduct.Spot =>
                 new MexcPublicOrderBookClient(
                     _metadataHttpClient,

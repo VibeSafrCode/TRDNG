@@ -35,6 +35,13 @@ public partial class MainWindow : Window
         if (ViewModel is { } viewModel) await viewModel.SelectAssetAsync("BTC");
     }
 
+    private async void SelectCatalogInstrument_Click(object? sender,
+        Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: string pairId } && ViewModel is { } viewModel)
+            await viewModel.SelectInstrumentAsync(pairId);
+    }
+
     private async void SelectSpot_Click(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
         if (ViewModel is { } viewModel) await viewModel.SelectProductAsync(MarketProduct.Spot);

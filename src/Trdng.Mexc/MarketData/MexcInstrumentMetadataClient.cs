@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using Trdng.Core.Instruments;
 
 namespace Trdng.Mexc.MarketData;
 
@@ -18,6 +19,32 @@ public sealed class MexcInstrumentMetadataClient(HttpClient httpClient)
             new Uri($"{Endpoint}?symbol={Uri.EscapeDataString(normalized)}"),
             cancellationToken).ConfigureAwait(false);
         return Parse(json, normalized);
+    }
+
+    public async Task<IReadOnlyList<PublicCatalogEntry>> GetSpotCatalogAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var json = await httpClient.GetByteArrayAsync(Endpoint, cancellationToken)
+            .ConfigureAwait(false);
+        return ParseCatalog(json);
+    }
+
+    public static IReadOnlyList<PublicCatalogEntry> ParseCatalog(ReadOnlyMemory<byte> utf8Json)
+    {
+        using var document = JsonDocument.Parse(utf8Json);
+        var entries = new List<PublicCatalogEntry>();
+        foreach (var item in document.RootElement.GetProperty("symbols").EnumerateArray())
+        {
+            if (!item.GetProperty("isSpotTradingAllowed").GetBoolean()) continue;
+            var status = RequiredScalar(item, "status");
+            if (status is not ("1" or "ENABLED")) continue;
+            var symbol = RequiredString(item, "symbol");
+            var baseAsset = RequiredString(item, "baseAsset");
+            var quoteAsset = RequiredString(item, "quoteAsset");
+            entries.Add(new(new(baseAsset, quoteAsset, MarketProduct.Spot),
+                TradingVenue.Mexc, symbol, null));
+        }
+        return entries;
     }
 
     public static MexcInstrumentMetadata Parse(

@@ -13,18 +13,25 @@ public static class VenueCardLayout
     private static readonly TradingVenue[] StableOrder =
         [TradingVenue.Mexc, TradingVenue.Gate, TradingVenue.Bybit];
 
-    public static IReadOnlyList<VenueCardDefinition> Build(CanonicalInstrument instrument) =>
+    public static IReadOnlyList<VenueCardDefinition> Build(CanonicalInstrument instrument,
+        Func<CanonicalInstrument, TradingVenue, VenueInstrumentCapability?>? resolver = null) =>
         StableOrder.Select(venue =>
         {
-            var capability = StarterInstrumentCatalog.Find(instrument, venue);
+            var capability = (resolver ?? StarterInstrumentCatalog.Find)(instrument, venue);
             return new VenueCardDefinition(
                 venue,
                 capability?.VenueSymbol ?? $"{instrument.BaseAsset}/{instrument.QuoteAsset}",
                 capability?.CanStreamMarketData == true,
-                capability?.CanStreamMarketData == true
-                    ? string.Empty
-                    : instrument.Product == MarketProduct.Spot
-                        ? "SPOT-АДАПТЕР ЕЩЁ НЕ РЕАЛИЗОВАН"
-                        : "PUBLIC PERPETUAL НЕ РЕАЛИЗОВАН");
+                capability?.CanStreamMarketData == true ? string.Empty :
+                    IsImplemented(venue, instrument.Product)
+                        ? "НЕТ В ОФИЦИАЛЬНОМ КАТАЛОГЕ"
+                        : instrument.Product == MarketProduct.Spot
+                            ? "SPOT-АДАПТЕР ЕЩЁ НЕ РЕАЛИЗОВАН"
+                            : "PUBLIC PERPETUAL НЕ РЕАЛИЗОВАН");
         }).ToArray();
+
+    private static bool IsImplemented(TradingVenue venue, MarketProduct product) =>
+        product == MarketProduct.Spot
+            ? venue == TradingVenue.Mexc
+            : venue is TradingVenue.Gate or TradingVenue.Bybit;
 }
