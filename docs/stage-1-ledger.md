@@ -362,7 +362,7 @@ Baseline зафиксирован: 2026-08-02 11:31 +05:00.
   Official GitHub CI `32380818244`: build PASS; 262/262 tests PASS, 0 failed,
   0 skipped. GUI/private/auth/order actions remain NOT RUN.
 
-### Post-publication runtime correction — AUDIT OPEN
+### Post-publication runtime correction — ACCEPTED / PUBLISHED
 
 - Loading/error are no longer overwritten as stale before a catalog observation;
   expected venue parse/network failures are isolated into an honest partial union.
@@ -371,7 +371,7 @@ Baseline зафиксирован: 2026-08-02 11:31 +05:00.
   selection PASS. No retry.
 - Corrected Release build/package/codesign PASS; current DLL SHA-256
   `31ee8de7f4123f642a9bc1c33f3b2eefb3f7ee42630e320b979abec7f72d7c09`.
-  Diff is uncommitted; independent audit remains open.
+  Independent audit accepted the exact correction.
 - MEXC closure: one diagnostic proved 1987 eligible, 107 ineligible and 15
   non-canonical entries. Typed per-entry rejection then produced one final
   acceptance result: 1987 valid / 122 rejected, with exact valid symbols retained
@@ -379,3 +379,6 @@ Baseline зафиксирован: 2026-08-02 11:31 +05:00.
   by 107 normally filtered ineligible entries. Exact duplicate mappings may be
   retained; a conflicting symbol quarantines the whole canonical pair for that
   batch. No retry; root/all-invalid remain venue failures.
+- Commit `ae0b6a52a55d7c94d68417f4e68412914ae72e63` was pushed to private `main`.
+  Official GitHub CI `32383296540`: Release build PASS, 0 warnings/errors;
+  269/269 tests PASS, 0 failed, 0 skipped.
