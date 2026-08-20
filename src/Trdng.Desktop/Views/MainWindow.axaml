@@ -52,7 +52,9 @@
 
     <Grid x:Name="OrderBookSurface" Grid.Row="1" ColumnDefinitions="190,*,*,*">
       <Border BorderBrush="#242830" BorderThickness="0,0,1,0" Padding="12">
-        <StackPanel Spacing="7">
+        <ScrollViewer VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled">
+          <StackPanel Spacing="7">
           <TextBlock Text="{Binding ProductLabel, StringFormat='ПРОДУКТ · {0}'}" Foreground="#D8DDE5" FontWeight="SemiBold" FontSize="11" />
           <Grid ColumnDefinitions="*,*" ColumnSpacing="6">
             <Button Content="SPOT" Click="SelectSpot_Click" Padding="8,7" />
@@ -171,7 +173,8 @@
               </Border>
             </StackPanel>
           </Border>
-        </StackPanel>
+          </StackPanel>
+        </ScrollViewer>
       </Border>
 
       <!-- Stable venue order: MEXC, Gate, Bybit. Each card owns its own book. -->
