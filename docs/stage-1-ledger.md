@@ -343,7 +343,7 @@ Baseline зафиксирован: 2026-08-02 11:31 +05:00.
   0 skipped. GUI/authenticated private requests/real-key smoke remain NOT RUN.
 - Evidence: [`in-app-keychain-entry-evidence.md`](in-app-keychain-entry-evidence.md).
 
-## S1.6 dynamic catalogs + book contrast — IMPLEMENTED / AUDIT OPEN
+## S1.6 dynamic catalogs + book contrast — ACCEPTED / PUBLISHED
 
 - Credential-free official MEXC Spot and Gate/Bybit USDT Perpetual catalogs now
   drive one bounded canonical search and exact per-venue availability.
@@ -357,3 +357,7 @@ Baseline зафиксирован: 2026-08-02 11:31 +05:00.
 - Existing app republished once; DLL SHA-256
   `494f69ae16b78a3dfac8a7b7a1f6d28e0db1363ef597cfd213c377383922a596`;
   strict codesign PASS. Evidence: [`s1.6-evidence.md`](s1.6-evidence.md).
+- Independent repeat audit: ACCEPTED; no open P1/P2. Implementation commit
+  `8a3c963eb3f0cc370c6fe5c4d4469fd0eb1eb364` pushed to private `main`.
+  Official GitHub CI `32380818244`: build PASS; 262/262 tests PASS, 0 failed,
+  0 skipped. GUI/private/auth/order actions remain NOT RUN.

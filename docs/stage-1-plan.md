@@ -95,7 +95,7 @@ pair-level status, rollback and redaction remain fail closed. No authenticated
 request or real credential was used. Evidence:
 [`in-app-keychain-entry-evidence.md`](in-app-keychain-entry-evidence.md).
 
-## S1.6 — dynamic public catalog / implementation complete, audit open
+## S1.6 — dynamic public catalog / accepted and published
 
 Official credential-free catalogs now provide a bounded search beyond the two
 starter shortcuts. MEXC Spot and Gate/Bybit USDT Perpetual remain product-
