@@ -107,4 +107,125 @@ public sealed class PublicInstrumentCatalogTests
         Assert.Null(CatalogSelectionPolicy.ChooseForProduct(catalog, spot,
             MarketProduct.Perpetual));
     }
+
+    [Fact]
+    public void PresentationDoesNotOverwriteLoadingOrErrorWithoutObservation()
+    {
+        var now = DateTimeOffset.UnixEpoch + TimeSpan.FromHours(1);
+        Assert.Equal("КАТАЛОГ · ЗАГРУЗКА", CatalogPresentationPolicy.PreserveOrMarkStale(
+            "КАТАЛОГ · ЗАГРУЗКА", null, now, TimeSpan.FromMinutes(15)));
+        Assert.Equal("КАТАЛОГ · ОШИБКА", CatalogPresentationPolicy.PreserveOrMarkStale(
+            "КАТАЛОГ · ОШИБКА", null, now, TimeSpan.FromMinutes(15)));
+        Assert.Equal("КАТАЛОГ · ЧАСТИЧНО ДОСТУПЕН",
+            CatalogPresentationPolicy.PreserveOrMarkStale("КАТАЛОГ · ЧАСТИЧНО ДОСТУПЕН",
+                now, now + TimeSpan.FromMinutes(14), TimeSpan.FromMinutes(15)));
+        Assert.Equal("КАТАЛОГ · УСТАРЕЛ", CatalogPresentationPolicy.PreserveOrMarkStale(
+            "КАТАЛОГ · ГОТОВ", now, now + TimeSpan.FromMinutes(16),
+            TimeSpan.FromMinutes(15)));
+    }
+
+    [Fact]
+    public async Task ExpectedVenueParserFailureIsIsolatedAndUnionStillStarts()
+    {
+        var spot = new CanonicalInstrument("SOL", "USDT", MarketProduct.Spot);
+        var failed = PublicCatalogLoadIsolation.LoadAsync(TradingVenue.Gate,
+            () => throw new ArgumentException("synthetic malformed venue entry"));
+        var valid = PublicCatalogLoadIsolation.LoadAsync(TradingVenue.Mexc,
+            () => Task.FromResult<IReadOnlyList<PublicCatalogEntry>>([
+                new(spot, TradingVenue.Mexc, "SOLUSDT", null)]));
+        var results = await Task.WhenAll(failed, valid);
+
+        Assert.Equal("INVALID_METADATA", results[0].FailureCategory);
+        Assert.True(results[1].Succeeded);
+        var catalog = new PublicInstrumentCatalog();
+        catalog.Replace(results.SelectMany(result => result.Entries));
+        Assert.Equal(spot, CatalogSelectionPolicy.ChooseInitial(catalog));
+    }
+
+    [Fact]
+    public void MexcCatalogRejectsEntriesIndependentlyWithTypedCounts()
+    {
+        var result = MexcInstrumentMetadataClient.ParseCatalogResult(Encoding.UTF8.GetBytes("""
+          {"symbols":[
+          {"symbol":"SOLUSDT","status":"1","baseAsset":"SOL","quoteAsset":"USDT","isSpotTradingAllowed":true},
+          {"symbol":"OFFUSDT","status":"3","baseAsset":"OFF","quoteAsset":"USDT","isSpotTradingAllowed":true},
+          {"symbol":"BADUSDT","status":"1","baseAsset":"$BAD","quoteAsset":"USDT","isSpotTradingAllowed":true},
+          {"symbol":"MISSUSDT","status":"1","quoteAsset":"USDT","isSpotTradingAllowed":true},
+          {"symbol":"BAD SYMBOL","status":"1","baseAsset":"BAD","quoteAsset":"USDT","isSpotTradingAllowed":true},
+          {"symbol":"BTCUSDT","status":"1","baseAsset":"BTC","quoteAsset":"USDT","isSpotTradingAllowed":true},
+          {"symbol":"SOLUSDT2","status":"1","baseAsset":"SOL","quoteAsset":"USDT","isSpotTradingAllowed":true}]}
+          """));
+
+        Assert.Single(result.Entries);
+        Assert.Equal("BTCUSDT", result.Entries[0].VenueSymbol);
+        Assert.Equal(6, result.RejectedCount);
+        Assert.Equal(5, result.InvalidEligibleCount);
+        Assert.Equal(1, result.Rejections[MexcCatalogRejection.Ineligible]);
+        Assert.Equal(1, result.Rejections[MexcCatalogRejection.InvalidCanonicalAsset]);
+        Assert.Equal(1, result.Rejections[MexcCatalogRejection.MissingOrWrongRequiredField]);
+        Assert.Equal(1, result.Rejections[MexcCatalogRejection.InvalidOther]);
+        Assert.Equal(2, result.Rejections[MexcCatalogRejection.DuplicateOrConflict]);
+    }
+
+    [Fact]
+    public void MexcCatalogRejectsInvalidRootAndCanReportAllInvalid()
+    {
+        Assert.Throws<InvalidDataException>(() =>
+            MexcInstrumentMetadataClient.ParseCatalogResult(
+                Encoding.UTF8.GetBytes("{\"symbols\":{}}")));
+        var allInvalid = MexcInstrumentMetadataClient.ParseCatalogResult(
+            Encoding.UTF8.GetBytes("""
+              {"symbols":[{"symbol":"OFFUSDT","status":"3","baseAsset":"OFF",
+              "quoteAsset":"USDT","isSpotTradingAllowed":false}]}
+              """));
+        Assert.Empty(allInvalid.Entries);
+        Assert.Equal(1, allInvalid.RejectedCount);
+    }
+
+    [Fact]
+    public async Task SuccessWithRejectionsIsDistinctFromCleanSuccess()
+    {
+        var spot = new CanonicalInstrument("SOL", "USDT", MarketProduct.Spot);
+        var partial = await PublicCatalogLoadIsolation.LoadBatchAsync(TradingVenue.Mexc,
+            () => Task.FromResult(new PublicCatalogBatch([
+                new(spot, TradingVenue.Mexc, "SOLUSDT", null)], 2)));
+        Assert.True(partial.Succeeded);
+        Assert.True(partial.HasRejections);
+        Assert.Equal(2, partial.RejectedCount);
+    }
+
+    [Fact]
+    public void ExactDuplicateRetainsMappingButDifferentSymbolRemovesPairPermanently()
+    {
+        var exact = MexcInstrumentMetadataClient.ParseCatalogResult(Encoding.UTF8.GetBytes("""
+          {"symbols":[
+          {"symbol":"SOLUSDT","status":"1","baseAsset":"SOL","quoteAsset":"USDT","isSpotTradingAllowed":true},
+          {"symbol":"SOLUSDT","status":"1","baseAsset":"SOL","quoteAsset":"USDT","isSpotTradingAllowed":true},
+          {"symbol":"BTCUSDT","status":"1","baseAsset":"BTC","quoteAsset":"USDT","isSpotTradingAllowed":true}]}
+          """));
+        Assert.Contains(exact.Entries, entry => entry.VenueSymbol == "SOLUSDT");
+
+        var conflict = MexcInstrumentMetadataClient.ParseCatalogResult(Encoding.UTF8.GetBytes("""
+          {"symbols":[
+          {"symbol":"SOLUSDT","status":"1","baseAsset":"SOL","quoteAsset":"USDT","isSpotTradingAllowed":true},
+          {"symbol":"SOL-USDT","status":"1","baseAsset":"SOL","quoteAsset":"USDT","isSpotTradingAllowed":true},
+          {"symbol":"SOLUSDT3","status":"1","baseAsset":"SOL","quoteAsset":"USDT","isSpotTradingAllowed":true},
+          {"symbol":"BTCUSDT","status":"1","baseAsset":"BTC","quoteAsset":"USDT","isSpotTradingAllowed":true}]}
+          """));
+        Assert.DoesNotContain(conflict.Entries, entry => entry.Instrument.BaseAsset == "SOL");
+        Assert.Contains(conflict.Entries, entry => entry.VenueSymbol == "BTCUSDT");
+        Assert.Equal(3, conflict.Rejections[MexcCatalogRejection.DuplicateOrConflict]);
+    }
+
+    [Fact]
+    public void IneligibleOnlyDoesNotMarkEligibleCatalogAsPartial()
+    {
+        var result = MexcInstrumentMetadataClient.ParseCatalogResult(Encoding.UTF8.GetBytes("""
+          {"symbols":[
+          {"symbol":"SOLUSDT","status":"1","baseAsset":"SOL","quoteAsset":"USDT","isSpotTradingAllowed":true},
+          {"symbol":"OFFUSDT","status":"3","baseAsset":"OFF","quoteAsset":"USDT","isSpotTradingAllowed":false}]}
+          """));
+        Assert.Equal(1, result.RejectedCount);
+        Assert.Equal(0, result.InvalidEligibleCount);
+    }
 }

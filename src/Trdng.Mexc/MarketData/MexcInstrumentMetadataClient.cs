@@ -4,6 +4,25 @@ using Trdng.Core.Instruments;
 
 namespace Trdng.Mexc.MarketData;
 
+public enum MexcCatalogRejection
+{
+    Ineligible,
+    InvalidCanonicalAsset,
+    MissingOrWrongRequiredField,
+    InvalidOther,
+    DuplicateOrConflict
+}
+
+public sealed record MexcCatalogParseResult(
+    IReadOnlyList<PublicCatalogEntry> Entries,
+    IReadOnlyDictionary<MexcCatalogRejection, int> Rejections)
+{
+    public int RejectedCount => Rejections.Values.Sum();
+    public int InvalidEligibleCount => Rejections
+        .Where(item => item.Key != MexcCatalogRejection.Ineligible)
+        .Sum(item => item.Value);
+}
+
 public sealed class MexcInstrumentMetadataClient(HttpClient httpClient)
 {
     private static readonly Uri Endpoint =
@@ -23,29 +42,116 @@ public sealed class MexcInstrumentMetadataClient(HttpClient httpClient)
 
     public async Task<IReadOnlyList<PublicCatalogEntry>> GetSpotCatalogAsync(
         CancellationToken cancellationToken = default)
+        => (await GetSpotCatalogResultAsync(cancellationToken).ConfigureAwait(false)).Entries;
+
+    public async Task<MexcCatalogParseResult> GetSpotCatalogResultAsync(
+        CancellationToken cancellationToken = default)
     {
         var json = await httpClient.GetByteArrayAsync(Endpoint, cancellationToken)
             .ConfigureAwait(false);
-        return ParseCatalog(json);
+        var result = ParseCatalogResult(json);
+        if (result.Entries.Count == 0)
+            throw new InvalidDataException("MEXC catalog contains no valid eligible entries.");
+        return result;
     }
 
     public static IReadOnlyList<PublicCatalogEntry> ParseCatalog(ReadOnlyMemory<byte> utf8Json)
+        => ParseCatalogResult(utf8Json).Entries;
+
+    public static MexcCatalogParseResult ParseCatalogResult(ReadOnlyMemory<byte> utf8Json)
     {
         using var document = JsonDocument.Parse(utf8Json);
+        if (!document.RootElement.TryGetProperty("symbols", out var symbols) ||
+            symbols.ValueKind != JsonValueKind.Array)
+            throw new InvalidDataException("MEXC symbols root must be an array.");
         var entries = new List<PublicCatalogEntry>();
-        foreach (var item in document.RootElement.GetProperty("symbols").EnumerateArray())
+        var counts = new Dictionary<MexcCatalogRejection, int>();
+        var exact = new Dictionary<CanonicalInstrument, string>();
+        var conflicts = new HashSet<CanonicalInstrument>();
+        foreach (var item in symbols.EnumerateArray())
         {
-            if (!item.GetProperty("isSpotTradingAllowed").GetBoolean()) continue;
-            var status = RequiredScalar(item, "status");
-            if (status is not ("1" or "ENABLED")) continue;
-            var symbol = RequiredString(item, "symbol");
-            var baseAsset = RequiredString(item, "baseAsset");
-            var quoteAsset = RequiredString(item, "quoteAsset");
-            entries.Add(new(new(baseAsset, quoteAsset, MarketProduct.Spot),
-                TradingVenue.Mexc, symbol, null));
+            if (item.ValueKind != JsonValueKind.Object ||
+                !TryRequiredString(item, "symbol", out var symbol) ||
+                !TryRequiredString(item, "baseAsset", out var baseAsset) ||
+                !TryRequiredString(item, "quoteAsset", out var quoteAsset) ||
+                !TryRequiredScalarString(item, "status", out var status) ||
+                !item.TryGetProperty("isSpotTradingAllowed", out var allowed) ||
+                allowed.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+            {
+                Add(counts, MexcCatalogRejection.MissingOrWrongRequiredField);
+                continue;
+            }
+            if (!allowed.GetBoolean() || status is not ("1" or "ENABLED"))
+            {
+                Add(counts, MexcCatalogRejection.Ineligible);
+                continue;
+            }
+            if (!IsCanonicalAsset(baseAsset) || !IsCanonicalAsset(quoteAsset))
+            {
+                Add(counts, MexcCatalogRejection.InvalidCanonicalAsset);
+                continue;
+            }
+            if (symbol.Any(char.IsWhiteSpace))
+            {
+                Add(counts, MexcCatalogRejection.InvalidOther);
+                continue;
+            }
+            CanonicalInstrument instrument;
+            try { instrument = new(baseAsset, quoteAsset, MarketProduct.Spot); }
+            catch (ArgumentException)
+            {
+                Add(counts, MexcCatalogRejection.InvalidCanonicalAsset);
+                continue;
+            }
+            if (conflicts.Contains(instrument))
+            {
+                Add(counts, MexcCatalogRejection.DuplicateOrConflict);
+                continue;
+            }
+            if (exact.TryGetValue(instrument, out var existing))
+            {
+                if (existing == symbol)
+                {
+                    Add(counts, MexcCatalogRejection.DuplicateOrConflict);
+                    continue;
+                }
+                entries.RemoveAll(entry => entry.Instrument == instrument);
+                exact.Remove(instrument);
+                conflicts.Add(instrument);
+                Add(counts, MexcCatalogRejection.DuplicateOrConflict, 2);
+                continue;
+            }
+            exact.Add(instrument, symbol);
+            entries.Add(new(instrument, TradingVenue.Mexc, symbol, null));
         }
-        return entries;
+        return new(entries, counts);
     }
+
+    private static bool TryRequiredString(JsonElement item, string name, out string value)
+    {
+        value = string.Empty;
+        return item.TryGetProperty(name, out var property) &&
+            property.ValueKind == JsonValueKind.String &&
+            property.GetString() is { Length: > 0 } text && (value = text).Length > 0;
+    }
+
+    private static bool TryRequiredScalarString(JsonElement item, string name, out string value)
+    {
+        value = string.Empty;
+        if (!item.TryGetProperty(name, out var property)) return false;
+        if (property.ValueKind == JsonValueKind.String && property.GetString() is { Length: > 0 } text)
+        { value = text; return true; }
+        if (property.ValueKind == JsonValueKind.Number)
+        { value = property.GetRawText(); return value.Length > 0; }
+        return false;
+    }
+
+    private static bool IsCanonicalAsset(string value) =>
+        value.All(char.IsAsciiLetterOrDigit);
+
+    private static void Add(Dictionary<MexcCatalogRejection, int> counts,
+        MexcCatalogRejection rejection, int amount = 1) =>
+        counts[rejection] = counts.GetValueOrDefault(rejection) + amount;
 
     public static MexcInstrumentMetadata Parse(
         ReadOnlyMemory<byte> utf8Json,

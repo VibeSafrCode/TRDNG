@@ -1039,8 +1039,8 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
             : "UNAVAILABLE";
         if (_client is null) ConnectionStatus = "UNAVAILABLE";
         if (_gateClient is null) GateConnectionStatus = "UNAVAILABLE";
-        if (!PublicCatalogFreshness.IsFresh(_catalogLoadedAt, now, CatalogMaxAge))
-            CatalogState = "КАТАЛОГ · УСТАРЕЛ";
+        CatalogState = CatalogPresentationPolicy.PreserveOrMarkStale(
+            CatalogState, _catalogLoadedAt, now, CatalogMaxAge);
         var eligibilityMask = GetScaleEligibilityMask(now);
         if (eligibilityMask != _scaleEligibilityMask)
         {
@@ -1106,34 +1106,32 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
     {
         var tasks = new[]
         {
-            LoadCatalogSafelyAsync(() => new MexcInstrumentMetadataClient(_metadataHttpClient)
-                .GetSpotCatalogAsync()),
-            LoadCatalogSafelyAsync(() => new GateInstrumentMetadataClient(_metadataHttpClient)
+            PublicCatalogLoadIsolation.LoadBatchAsync(TradingVenue.Mexc, async () =>
+            {
+                var result = await new MexcInstrumentMetadataClient(_metadataHttpClient)
+                    .GetSpotCatalogResultAsync().ConfigureAwait(false);
+                return new PublicCatalogBatch(result.Entries, result.InvalidEligibleCount);
+            }),
+            PublicCatalogLoadIsolation.LoadAsync(TradingVenue.Gate, () =>
+                new GateInstrumentMetadataClient(_metadataHttpClient)
                 .GetUsdtPerpetualCatalogAsync()),
-            LoadCatalogSafelyAsync(() => new BybitInstrumentMetadataClient(_metadataHttpClient)
+            PublicCatalogLoadIsolation.LoadAsync(TradingVenue.Bybit, () =>
+                new BybitInstrumentMetadataClient(_metadataHttpClient)
                 .GetLinearPerpetualCatalogAsync())
         };
         var catalogs = await Task.WhenAll(tasks).ConfigureAwait(false);
-        var entries = catalogs.SelectMany(result => result).ToArray();
+        var entries = catalogs.SelectMany(result => result.Entries).ToArray();
         if (entries.Length == 0) throw new InvalidDataException("Public catalogs are unavailable.");
         _publicCatalog.Replace(entries);
         _catalogLoadedAt = DateTimeOffset.UtcNow;
         await Dispatcher.UIThread.InvokeAsync(() =>
         {
-            _catalogBaseState = catalogs.All(result => result.Count != 0)
+            _catalogBaseState = catalogs.All(result => result.Succeeded &&
+                result.Entries.Count != 0 && !result.HasRejections)
                 ? "КАТАЛОГ · ГОТОВ" : "КАТАЛОГ · ЧАСТИЧНО ДОСТУПЕН";
             CatalogState = _catalogBaseState;
             RefreshCatalogSearch(SelectedProduct);
         });
-    }
-
-    private static async Task<IReadOnlyList<PublicCatalogEntry>> LoadCatalogSafelyAsync(
-        Func<Task<IReadOnlyList<PublicCatalogEntry>>> load)
-    {
-        try { return await load().ConfigureAwait(false); }
-        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException or
-            InvalidDataException or System.Text.Json.JsonException or FormatException)
-        { return []; }
     }
 
     private void RefreshCatalogSearch(MarketProduct product)

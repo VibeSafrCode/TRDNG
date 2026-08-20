@@ -361,3 +361,21 @@ Baseline зафиксирован: 2026-08-02 11:31 +05:00.
   `8a3c963eb3f0cc370c6fe5c4d4469fd0eb1eb364` pushed to private `main`.
   Official GitHub CI `32380818244`: build PASS; 262/262 tests PASS, 0 failed,
   0 skipped. GUI/private/auth/order actions remain NOT RUN.
+
+### Post-publication runtime correction — AUDIT OPEN
+
+- Loading/error are no longer overwritten as stale before a catalog observation;
+  expected venue parse/network failures are isolated into an honest partial union.
+- One final-method full-catalog smoke: MEXC `INVALID_METADATA` (0), Gate
+  `NETWORK` (0), Bybit PASS (724); union 724 and APT/USDT Perpetual initial
+  selection PASS. No retry.
+- Corrected Release build/package/codesign PASS; current DLL SHA-256
+  `31ee8de7f4123f642a9bc1c33f3b2eefb3f7ee42630e320b979abec7f72d7c09`.
+  Diff is uncommitted; independent audit remains open.
+- MEXC closure: one diagnostic proved 1987 eligible, 107 ineligible and 15
+  non-canonical entries. Typed per-entry rejection then produced one final
+  acceptance result: 1987 valid / 122 rejected, with exact valid symbols retained
+  and honest partial state driven by the 15 invalid eligible-looking entries, not
+  by 107 normally filtered ineligible entries. Exact duplicate mappings may be
+  retained; a conflicting symbol quarantines the whole canonical pair for that
+  batch. No retry; root/all-invalid remain venue failures.

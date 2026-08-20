@@ -81,6 +81,69 @@ public static class PublicCatalogFreshness
         maxAge > TimeSpan.Zero && loadedAt is { } loaded && now >= loaded && now - loaded <= maxAge;
 }
 
+public static class CatalogPresentationPolicy
+{
+    public static string PreserveOrMarkStale(string current, DateTimeOffset? loadedAt,
+        DateTimeOffset now, TimeSpan maxAge) =>
+        loadedAt is not null && !PublicCatalogFreshness.IsFresh(loadedAt, now, maxAge)
+            ? "КАТАЛОГ · УСТАРЕЛ" : current;
+}
+
+public sealed record VenueCatalogLoadResult(
+    TradingVenue Venue,
+    IReadOnlyList<PublicCatalogEntry> Entries,
+    string? FailureCategory,
+    int RejectedCount = 0)
+{
+    public bool Succeeded => FailureCategory is null;
+    public bool HasRejections => RejectedCount > 0;
+}
+
+public sealed record PublicCatalogBatch(
+    IReadOnlyList<PublicCatalogEntry> Entries,
+    int RejectedCount);
+
+public static class PublicCatalogLoadIsolation
+{
+    public static async Task<VenueCatalogLoadResult> LoadAsync(TradingVenue venue,
+        Func<Task<IReadOnlyList<PublicCatalogEntry>>> loader)
+    {
+        try { return new(venue, await loader().ConfigureAwait(false), null); }
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException or
+            InvalidDataException or System.Text.Json.JsonException or FormatException or
+            ArgumentException or OverflowException)
+        {
+            return new(venue, [], exception switch
+            {
+                HttpRequestException or TaskCanceledException => "NETWORK",
+                System.Text.Json.JsonException or InvalidDataException or FormatException or
+                    ArgumentException or OverflowException => "INVALID_METADATA",
+                _ => "ERROR"
+            });
+        }
+    }
+
+
+    public static async Task<VenueCatalogLoadResult> LoadBatchAsync(TradingVenue venue,
+        Func<Task<PublicCatalogBatch>> loader)
+    {
+        try
+        {
+            var batch = await loader().ConfigureAwait(false);
+            if (batch.Entries.Count == 0)
+                return new(venue, [], "INVALID_METADATA", batch.RejectedCount);
+            return new(venue, batch.Entries, null, batch.RejectedCount);
+        }
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException or
+            InvalidDataException or System.Text.Json.JsonException or FormatException or
+            ArgumentException or OverflowException)
+        {
+            return new(venue, [], exception is HttpRequestException or TaskCanceledException
+                ? "NETWORK" : "INVALID_METADATA");
+        }
+    }
+}
+
 public static class CatalogSelectionPolicy
 {
     public static CanonicalInstrument? ChooseInitial(PublicInstrumentCatalog catalog)
