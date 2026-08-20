@@ -323,3 +323,18 @@ Baseline зафиксирован: 2026-08-02 11:31 +05:00.
 - CI run `32235655100`: Release build PASS; official tests 245/245 PASS.
 - Fresh-clone excluded path/content scans: zero; worktree clean.
 - Recovery evidence exists externally; restore remains NOT RUN.
+
+## In-app Keychain entry — IMPLEMENTED / SECURITY AUDIT OPEN
+
+- Two isolated MEXC profiles (`READ-ONLY`, `ORDER TEST`) store exact credential
+  pairs only through the existing audited Keychain vault.
+- Pair status, STOP gate, explicit replacement, rollback, field/buffer clearing,
+  two-step revoke and profile isolation are implemented fail closed.
+- No credentials, authenticated private request, order-test call, production
+  order or money path was used.
+- Targeted test assembly compile and final Release build: PASS, 0 warnings/errors.
+  Local VSTest runtime hit the known IPC denial; GitHub full run waits for audit.
+- Existing app updated once; DLL SHA-256
+  `c203406a68f98632ae6898af8cd892585d811b981aa10c060a3cdbc9706212d4`;
+  strict codesign PASS. Diff remains uncommitted for independent security audit.
+- Evidence: [`in-app-keychain-entry-evidence.md`](in-app-keychain-entry-evidence.md).

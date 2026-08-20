@@ -87,6 +87,14 @@ MEXC `/api/v3/order/test` as a no-execution validation oracle. It does not alter
 production filters or authorize S4. No key/private request was used. Evidence:
 [`pre-key-validation-probe-evidence.md`](pre-key-validation-probe-evidence.md).
 
+## In-app Keychain entry — implementation complete / audit open
+
+Two isolated MEXC credential pairs can now be entered and revoked inside the app
+through the existing audited macOS Keychain boundary. STOP, explicit replacement,
+pair-level status, rollback and redaction remain fail closed. No authenticated
+request or real credential was used. Evidence:
+[`in-app-keychain-entry-evidence.md`](in-app-keychain-entry-evidence.md).
+
 MEXC Futures public books допустимы. Private futures trading остаётся
 `BLOCKED/UNAVAILABLE`: официальная Contract API помечает place/cancel как under
 maintenance/closed. Поддержку нельзя включать, пока официальный API и

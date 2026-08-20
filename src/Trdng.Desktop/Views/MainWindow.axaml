@@ -130,22 +130,45 @@
                   CornerRadius="6" Padding="10" Margin="0,8,0,0">
             <StackPanel Spacing="3">
               <TextBlock Text="MEXC API" FontWeight="SemiBold" />
-              <TextBlock Text="{Binding MexcCredentialStatus}" Foreground="#8B93A1"
-                         FontSize="10" TextWrapping="Wrap" />
+              <TextBlock Text="KEYCHAIN · ЗНАЧЕНИЯ СКРЫТЫ" Foreground="#656D79"
+                         FontSize="9" />
               <TextBlock Text="{Binding MexcPrivateStatus}" Foreground="#8B93A1"
                          FontSize="9" TextWrapping="Wrap" />
               <TextBlock Text="{Binding MexcOrderTestStatus}" Foreground="#8B93A1"
                          FontSize="9" TextWrapping="Wrap" />
-              <TextBlock Text="KEYCHAIN · ЗНАЧЕНИЯ СКРЫТЫ" Foreground="#656D79"
-                         FontSize="9" />
-              <Button Content="УДАЛИТЬ ИЗ KEYCHAIN"
-                      IsVisible="{Binding CanRevokeMexcCredential}"
-                      Click="ArmMexcCredentialRevoke_Click" Padding="5,6" />
-              <Button Content="ПОДТВЕРДИТЬ УДАЛЕНИЕ"
-                      IsVisible="{Binding CanConfirmRevokeMexcCredential}"
-                      Click="ConfirmMexcCredentialRevoke_Click" Padding="5,6" />
-              <TextBlock Text="{Binding MexcCredentialAction}" Foreground="#F5C96A"
-                         FontSize="9" TextWrapping="Wrap" />
+              <Border Background="#111419" CornerRadius="4" Padding="7" Margin="0,3,0,0">
+                <StackPanel Spacing="3">
+                  <TextBlock Text="READ-ONLY" FontWeight="SemiBold" />
+                  <TextBlock Text="{Binding ReadOnlyCredentialStatus}" Foreground="#8B93A1" FontSize="9" />
+                  <TextBox PlaceholderText="API key" PasswordChar="●" Text="{Binding ReadOnlyApiKey, Mode=TwoWay}" />
+                  <TextBox PlaceholderText="Secret" PasswordChar="●" Text="{Binding ReadOnlySecret, Mode=TwoWay}" />
+                  <CheckBox Content="УДАЛИТЬ СТАРУЮ ПАРУ И ЗАМЕНИТЬ · ПРИ ОШИБКЕ ОСТАНЕТСЯ НЕ НАСТРОЕНА"
+                            IsChecked="{Binding ReadOnlyReplaceConfirmed, Mode=TwoWay}" />
+                  <Button Content="СОХРАНИТЬ В KEYCHAIN" Click="SaveReadOnlyCredentials_Click" Padding="5,6" />
+                  <Button Content="УДАЛИТЬ" IsVisible="{Binding CanRevokeReadOnlyCredential}"
+                          Click="ArmReadOnlyCredentialRevoke_Click" Padding="5,6" />
+                  <Button Content="ПОДТВЕРДИТЬ УДАЛЕНИЕ" IsVisible="{Binding CanConfirmRevokeReadOnlyCredential}"
+                          Click="ConfirmReadOnlyCredentialRevoke_Click" Padding="5,6" />
+                  <TextBlock Text="{Binding ReadOnlyCredentialAction}" Foreground="#F5C96A" FontSize="9" TextWrapping="Wrap" />
+                </StackPanel>
+              </Border>
+              <Border Background="#111419" CornerRadius="4" Padding="7" Margin="0,3,0,0">
+                <StackPanel Spacing="3">
+                  <TextBlock Text="ORDER TEST" FontWeight="SemiBold" />
+                  <TextBlock Text="ТРЕБУЕТ TRADE PERMISSION · БЕЗ WITHDRAWAL" Foreground="#F5C96A" FontSize="9" TextWrapping="Wrap" />
+                  <TextBlock Text="{Binding OrderTestCredentialStatus}" Foreground="#8B93A1" FontSize="9" />
+                  <TextBox PlaceholderText="API key" PasswordChar="●" Text="{Binding OrderTestApiKey, Mode=TwoWay}" />
+                  <TextBox PlaceholderText="Secret" PasswordChar="●" Text="{Binding OrderTestSecret, Mode=TwoWay}" />
+                  <CheckBox Content="УДАЛИТЬ СТАРУЮ ПАРУ И ЗАМЕНИТЬ · ПРИ ОШИБКЕ ОСТАНЕТСЯ НЕ НАСТРОЕНА"
+                            IsChecked="{Binding OrderTestReplaceConfirmed, Mode=TwoWay}" />
+                  <Button Content="СОХРАНИТЬ В KEYCHAIN" Click="SaveOrderTestCredentials_Click" Padding="5,6" />
+                  <Button Content="УДАЛИТЬ" IsVisible="{Binding CanRevokeOrderTestCredential}"
+                          Click="ArmOrderTestCredentialRevoke_Click" Padding="5,6" />
+                  <Button Content="ПОДТВЕРДИТЬ УДАЛЕНИЕ" IsVisible="{Binding CanConfirmRevokeOrderTestCredential}"
+                          Click="ConfirmOrderTestCredentialRevoke_Click" Padding="5,6" />
+                  <TextBlock Text="{Binding OrderTestCredentialAction}" Foreground="#F5C96A" FontSize="9" TextWrapping="Wrap" />
+                </StackPanel>
+              </Border>
             </StackPanel>
           </Border>
         </StackPanel>

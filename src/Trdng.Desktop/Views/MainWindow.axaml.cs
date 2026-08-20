@@ -75,15 +75,18 @@ public partial class MainWindow : Window
     private void PlayDryRunSimulation_Click(object? sender, Avalonia.Interactivity.RoutedEventArgs e) =>
         ViewModel?.PlayDryRunSimulation();
 
-    private void ArmMexcCredentialRevoke_Click(object? sender,
-        Avalonia.Interactivity.RoutedEventArgs e) => ViewModel?.ArmMexcCredentialRevoke();
-
-    private async void ConfirmMexcCredentialRevoke_Click(object? sender,
-        Avalonia.Interactivity.RoutedEventArgs e)
-    {
-        if (ViewModel is { } viewModel)
-            await viewModel.ConfirmMexcCredentialRevokeAsync();
-    }
+    private async void SaveReadOnlyCredentials_Click(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    { if (ViewModel is { } vm) await vm.SaveReadOnlyCredentialsAsync(vm.ReadOnlyReplaceConfirmed); }
+    private async void SaveOrderTestCredentials_Click(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    { if (ViewModel is { } vm) await vm.SaveOrderTestCredentialsAsync(vm.OrderTestReplaceConfirmed); }
+    private async void ArmReadOnlyCredentialRevoke_Click(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    { if (ViewModel is { } vm) await vm.ArmCredentialRevokeAsync(true); }
+    private async void ConfirmReadOnlyCredentialRevoke_Click(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    { if (ViewModel is { } vm) await vm.ConfirmCredentialRevokeAsync(true); }
+    private async void ArmOrderTestCredentialRevoke_Click(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    { if (ViewModel is { } vm) await vm.ArmCredentialRevokeAsync(false); }
+    private async void ConfirmOrderTestCredentialRevoke_Click(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    { if (ViewModel is { } vm) await vm.ConfirmCredentialRevokeAsync(false); }
 
     private void OnPinch(object? sender, PinchEventArgs e)
     {

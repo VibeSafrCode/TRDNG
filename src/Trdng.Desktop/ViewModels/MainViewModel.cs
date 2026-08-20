@@ -80,10 +80,8 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
     private bool _simulationJournalAvailable;
     private readonly CredentialAudit _credentialAudit;
     private readonly ICredentialVault _credentialVault;
-    private readonly CredentialRevokeController _credentialRevoke;
-    private CredentialVaultState _mexcCredentialState = CredentialVaultState.NotConfigured;
-    private static readonly CredentialIdentity MexcCredentialIdentity =
-        new(TradingVenue.Mexc, "default");
+    private readonly CredentialPairController _readOnlyCredentials;
+    private readonly CredentialPairController _orderTestCredentials;
     private static readonly int[] DepthOptions = [8, 12, 18, 24];
     // Every density fits inside one half of the 720px default window.
     // This prevents the nearest ask/bid row from painting beneath the spread.
@@ -104,8 +102,13 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
         _credentialVault = new AuditedCredentialVault(nativeVault, _credentialAudit);
         _dryRunConfirmation = new(
             TimeSpan.FromSeconds(8), _dryRunAudit);
-        _credentialRevoke = new(_credentialVault, MexcCredentialIdentity,
-            TimeSpan.FromSeconds(8));
+        _readOnlyCredentials = new(_credentialVault,
+            MexcCredentialProvider.ApiKeyIdentity, MexcCredentialProvider.SecretIdentity,
+            () => _dryRunConfirmation.KillSwitchEngaged, TimeSpan.FromSeconds(8));
+        _orderTestCredentials = new(_credentialVault,
+            MexcOrderTestCredentialProvider.ApiKeyIdentity,
+            MexcOrderTestCredentialProvider.SecretIdentity,
+            () => _dryRunConfirmation.KillSwitchEngaged, TimeSpan.FromSeconds(8));
         (_simulationStore, _simulationJournalAvailable) = CreateSimulationStore();
         _simulationPlayback = new(_simulationStore);
         SimulationTimeline = _simulationJournalAvailable
@@ -249,7 +252,28 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
     public partial string SimulationTimeline { get; set; } = "LIFECYCLE · НЕТ ЗАПИСЕЙ";
 
     [ObservableProperty]
-    public partial string MexcCredentialStatus { get; set; } = "ПРОВЕРКА KEYCHAIN";
+    public partial string ReadOnlyCredentialStatus { get; set; } = "ПРОВЕРКА KEYCHAIN";
+
+    [ObservableProperty]
+    public partial string OrderTestCredentialStatus { get; set; } = "ПРОВЕРКА KEYCHAIN";
+
+    [ObservableProperty]
+    public partial string ReadOnlyApiKey { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    public partial string ReadOnlySecret { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    public partial string OrderTestApiKey { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    public partial string OrderTestSecret { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    public partial bool ReadOnlyReplaceConfirmed { get; set; }
+
+    [ObservableProperty]
+    public partial bool OrderTestReplaceConfirmed { get; set; }
 
     [ObservableProperty]
     public partial string MexcPrivateStatus { get; set; } =
@@ -260,13 +284,28 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
         MexcOrderTestPresentation.Masked(MexcOrderTestState.KeyRequired);
 
     [ObservableProperty]
-    public partial bool CanRevokeMexcCredential { get; set; }
+    public partial bool CanRevokeReadOnlyCredential { get; set; }
 
     [ObservableProperty]
-    public partial bool CanConfirmRevokeMexcCredential { get; set; }
+    public partial bool CanConfirmRevokeReadOnlyCredential { get; set; }
 
     [ObservableProperty]
-    public partial string MexcCredentialAction { get; set; } = "";
+    public partial bool CanConfirmReplaceReadOnlyCredential { get; set; }
+
+    [ObservableProperty]
+    public partial bool CanRevokeOrderTestCredential { get; set; }
+
+    [ObservableProperty]
+    public partial bool CanConfirmRevokeOrderTestCredential { get; set; }
+
+    [ObservableProperty]
+    public partial bool CanConfirmReplaceOrderTestCredential { get; set; }
+
+    [ObservableProperty]
+    public partial string ReadOnlyCredentialAction { get; set; } = "";
+
+    [ObservableProperty]
+    public partial string OrderTestCredentialAction { get; set; } = "";
 
     private OrderSide _dryRunSide = OrderSide.Buy;
 
@@ -399,9 +438,12 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
 
     public void DisengageDryRunStop()
     {
-        _credentialRevoke.Invalidate();
-        _credentialRevoke.UpdateState(_mexcCredentialState, stopEngaged: false);
-        ApplyCredentialRevokePresentation(_credentialRevoke.Presentation);
+        _readOnlyCredentials.Invalidate();
+        _orderTestCredentials.Invalidate();
+        CanRevokeReadOnlyCredential = false;
+        CanRevokeOrderTestCredential = false;
+        CanConfirmRevokeReadOnlyCredential = false;
+        CanConfirmRevokeOrderTestCredential = false;
         if (!_simulationJournalAvailable)
         {
             DryRunConfirmationState = "JOURNAL BLOCKED · STOP ОСТАЁТСЯ ВКЛЮЧЕН";
@@ -429,18 +471,26 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
         _preparedDryRun = null;
         DryRunRiskState = "STOP · ENGAGED";
         DryRunConfirmationState = "СИМУЛЯЦИЯ ЗАБЛОКИРОВАНА";
-        _credentialRevoke.UpdateState(_mexcCredentialState, stopEngaged: true);
-        ApplyCredentialRevokePresentation(_credentialRevoke.Presentation);
+        _readOnlyCredentials.Invalidate();
+        _orderTestCredentials.Invalidate();
+        _ = RefreshCredentialStatusAsync();
     }
 
-    public void ArmMexcCredentialRevoke() => ApplyCredentialRevokePresentation(
-        _credentialRevoke.Arm(_dryRunConfirmation.KillSwitchEngaged));
+    public Task SaveReadOnlyCredentialsAsync(bool replace) =>
+        SaveCredentialPairAsync(_readOnlyCredentials, isReadOnly: true, replace: replace);
 
-    public async Task ConfirmMexcCredentialRevokeAsync()
+    public Task SaveOrderTestCredentialsAsync(bool replace) =>
+        SaveCredentialPairAsync(_orderTestCredentials, isReadOnly: false, replace: replace);
+
+    public async Task ArmCredentialRevokeAsync(bool isReadOnly) =>
+        ApplyCredentialPresentation(isReadOnly, await (isReadOnly
+            ? _readOnlyCredentials.ArmRevokeAsync()
+            : _orderTestCredentials.ArmRevokeAsync()));
+
+    public async Task ConfirmCredentialRevokeAsync(bool isReadOnly)
     {
-        var presentation = await _credentialRevoke.ConfirmAsync(
-            _dryRunConfirmation.KillSwitchEngaged);
-        ApplyCredentialRevokePresentation(presentation);
+        var controller = isReadOnly ? _readOnlyCredentials : _orderTestCredentials;
+        ApplyCredentialPresentation(isReadOnly, await controller.ConfirmRevokeAsync());
         await RefreshCredentialStatusAsync();
     }
 
@@ -1050,33 +1100,77 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
     {
         try
         {
-            var result = await _credentialVault.GetStatusAsync(MexcCredentialIdentity);
+            var readOnly = await _readOnlyCredentials.RefreshAsync();
+            var orderTest = await _orderTestCredentials.RefreshAsync();
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                MexcCredentialStatus = CredentialStatusPresentation.ToMaskedText(result.State);
-                _mexcCredentialState = result.State;
-                _credentialRevoke.UpdateState(result.State,
-                    _dryRunConfirmation.KillSwitchEngaged);
-                ApplyCredentialRevokePresentation(_credentialRevoke.Presentation);
+                ApplyCredentialPresentation(isReadOnly: true, readOnly);
+                ApplyCredentialPresentation(isReadOnly: false, orderTest);
             });
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                MexcCredentialStatus = "ОШИБКА KEYCHAIN";
-                CanRevokeMexcCredential = false;
-                CanConfirmRevokeMexcCredential = false;
-                MexcCredentialAction = "ОШИБКА KEYCHAIN";
+                ApplyCredentialPresentation(true,
+                    new(CredentialPairAction.Error, "ОШИБКА KEYCHAIN", false, false, false));
+                ApplyCredentialPresentation(false,
+                    new(CredentialPairAction.Error, "ОШИБКА KEYCHAIN", false, false, false));
             });
         }
     }
 
-    private void ApplyCredentialRevokePresentation(CredentialRevokePresentation presentation)
+    private async Task SaveCredentialPairAsync(CredentialPairController controller,
+        bool isReadOnly, bool replace)
     {
-        CanRevokeMexcCredential = presentation.CanArm;
-        CanConfirmRevokeMexcCredential = presentation.CanConfirm;
-        MexcCredentialAction = presentation.MaskedMessage;
+        var input = new CredentialPairInput
+        {
+            ApiKey = isReadOnly ? ReadOnlyApiKey : OrderTestApiKey,
+            Secret = isReadOnly ? ReadOnlySecret : OrderTestSecret
+        };
+        try
+        {
+            ApplyCredentialPresentation(isReadOnly,
+                await controller.SaveAsync(input, replace));
+        }
+        finally
+        {
+            if (isReadOnly)
+            {
+                ReadOnlyApiKey = string.Empty;
+                ReadOnlySecret = string.Empty;
+                ReadOnlyReplaceConfirmed = false;
+            }
+            else
+            {
+                OrderTestApiKey = string.Empty;
+                OrderTestSecret = string.Empty;
+                OrderTestReplaceConfirmed = false;
+            }
+        }
+    }
+
+    private void ApplyCredentialPresentation(bool isReadOnly,
+        CredentialPairPresentation presentation)
+    {
+        if (isReadOnly)
+        {
+            ReadOnlyCredentialStatus = presentation.Action == CredentialPairAction.Stored
+                ? "СОХРАНЕНО В KEYCHAIN" : presentation.MaskedMessage;
+            ReadOnlyCredentialAction = presentation.MaskedMessage;
+            CanRevokeReadOnlyCredential = presentation.CanArmRevoke;
+            CanConfirmRevokeReadOnlyCredential = presentation.CanConfirmRevoke;
+            CanConfirmReplaceReadOnlyCredential = presentation.CanConfirmReplace;
+        }
+        else
+        {
+            OrderTestCredentialStatus = presentation.Action == CredentialPairAction.Stored
+                ? "СОХРАНЕНО В KEYCHAIN" : presentation.MaskedMessage;
+            OrderTestCredentialAction = presentation.MaskedMessage;
+            CanRevokeOrderTestCredential = presentation.CanArmRevoke;
+            CanConfirmRevokeOrderTestCredential = presentation.CanConfirmRevoke;
+            CanConfirmReplaceOrderTestCredential = presentation.CanConfirmReplace;
+        }
     }
 
     private async Task LoadInstrumentMetadataSafelyAsync(
