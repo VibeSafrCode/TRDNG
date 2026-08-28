@@ -13,7 +13,7 @@
 | Restore verification | NOT RUN | Recovery artifacts exist; restore procedure not executed |
 | Repository root | VERIFIED | `5780ef66b20143e918e1d88399bfe985b0c1287e` |
 | Current main / origin | VERIFIED | `af86d2f969d75c84cc8518860be50e23b0776faf`; local `main` equals `origin/main` |
-| Current working branch | DIRTY / PUBLICATION PENDING | `codex/gpt-pro-audit-request`; MEXC diagnostics `b0af3b2`, branding `665e1c4`, PR-01 implementation `a3435bc`; closure docs pending |
+| Current working branch | PUBLISHED / REVIEW OPEN | Public `codex/gpt-pro-audit-request`; MEXC diagnostics `b0af3b2`, branding `665e1c4`, PR-01 implementation `a3435bc`, evidence through `8f88ffb` |
 | GitHub publication | OWNER ACTION | Read-only check 2026-08-28 07:49 +05:00: `PUBLIC`, no license; no visibility change performed |
 | CI acceptance | VERIFIED HISTORICAL | Run `32383296540`: Release build PASS; official tests 269/269 PASS; current dirty branch has no CI evidence |
 | Older sprint commit IDs | PRE-SEPARATION LOCAL HISTORY | IDs in older evidence documents are preserved by the verified bundle and are not ancestors of the recreated root |
@@ -45,8 +45,10 @@
   `BACKUP NOT RUN`. No tag, notarization, release or push was performed as part
   of packaging.
 - Source commits created after package verification: `b0af3b2`, `665e1c4`,
-  `a3435bc`. No tag/notarization/release. Publication remained pending at this
-  entry.
+  `a3435bc`; evidence through `8f88ffb`. The public branch remote SHA was verified
+  at `8f88ffbb961f21b7764b81e9920e578406580a1c`. No PR, merge, tag,
+  notarization or release. Branch push did not trigger CI under current workflow
+  rules.
 
 ## Формат backup-записи
 

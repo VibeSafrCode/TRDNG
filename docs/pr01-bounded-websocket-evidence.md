@@ -93,3 +93,12 @@ The accepted implementation is isolated in local commit
 also separated into `b0af3b2` (MEXC diagnostics) and `665e1c4` (branding). At the
 time of this evidence update no push, PR, merge, GitHub setting change or release
 had been performed.
+
+## Publication update
+
+- Public branch `codex/gpt-pro-audit-request` was fast-forwarded through factual
+  documentation commit `8f88ffb`; remote SHA verification: PASS.
+- Repository visibility remained `PUBLIC` by explicit Founder decision; default
+  branch remained `main` and was not changed.
+- No GitHub CI run was created because the workflow triggers only for `main` push
+  or pull request. PR, merge and release remain `NOT RUN`.

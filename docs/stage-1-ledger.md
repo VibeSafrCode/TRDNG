@@ -425,3 +425,11 @@ Baseline зафиксирован: 2026-08-02 11:31 +05:00.
 - Evidence: [`pr01-bounded-websocket-evidence.md`](pr01-bounded-websocket-evidence.md).
 - Implementation is isolated in local commit `a3435bc`; independent review,
   push and GitHub CI remain separate gates.
+
+### PR-01 publication
+
+- MEXC diagnostics `b0af3b2`, branding `665e1c4`, PR-01 implementation
+  `a3435bc` and evidence through `8f88ffb` were pushed to public branch
+  `codex/gpt-pro-audit-request`; remote SHA verification: PASS.
+- `main` was not changed. No PR/merge/release. No CI run was created because the
+  current workflow listens only to `main` pushes and pull requests.

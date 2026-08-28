@@ -61,5 +61,7 @@ this review. Those are separate audit PRs.
 - Read-only repository check on 2026-08-28: `PUBLIC`; no setting was changed.
 - Unrelated carry-in README/S3.2/S3.3 factual reconciliation remains open and is
   not evidence for or against PR-01.
-- Implementation commit: created locally; push/PR/merge/release were not yet
-  performed when this packet was prepared.
+- Implementation commit `a3435bc` and its evidence through `8f88ffb` were
+  published to public branch `codex/gpt-pro-audit-request`. Remote SHA verification
+  passed. CI was not triggered because this was neither `main` nor a pull request;
+  PR/merge/release remain `NOT RUN`.
