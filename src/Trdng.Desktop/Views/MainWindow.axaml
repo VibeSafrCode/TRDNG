@@ -5,7 +5,7 @@
         x:DataType="vm:MainViewModel"
         Width="1280" Height="720" MinWidth="960" MinHeight="540"
         FontSize="14" Background="#0B0D10" Foreground="#F3F4F6"
-        Title="{Binding InstrumentTitle}">
+        Title="{Binding InstrumentTitle, StringFormat='MMM_618 · {0}'}">
   <Window.Resources>
     <DataTemplate x:Key="AskRow" x:DataType="vm:BookLevelViewModel">
       <Grid Height="{Binding RowHeight}" Opacity="{Binding RowOpacity}">
