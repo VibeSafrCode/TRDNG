@@ -1,4 +1,3 @@
-using System.Buffers;
 using System.Diagnostics;
 using System.Net.WebSockets;
 using System.Text;
@@ -109,6 +108,10 @@ public sealed class BybitPublicOrderBookClient : IPublicMarketDataClient
             {
                 break;
             }
+            catch (WebSocketMessageEnvelopeException exception)
+            {
+                ChangeState(MarketDataConnectionState.Reconnecting, exception.SafeCode);
+            }
             catch (Exception exception) when (
                 exception is WebSocketException or IOException or InvalidDataException)
             {
@@ -131,8 +134,7 @@ public sealed class BybitPublicOrderBookClient : IPublicMarketDataClient
         ClientWebSocket socket,
         CancellationToken cancellationToken)
     {
-        var receiveBuffer = ArrayPool<byte>.Shared.Rent(64 * 1024);
-        var messageBuffer = new ArrayBufferWriter<byte>(64 * 1024);
+        using var messageReader = new BoundedWebSocketMessageReader();
         var renderClock = Stopwatch.StartNew();
         var lastBookPublishedAt = TimeSpan.Zero;
         var lastClusterPublishedAt = TimeSpan.Zero;
@@ -142,33 +144,24 @@ public sealed class BybitPublicOrderBookClient : IPublicMarketDataClient
             while (socket.State == WebSocketState.Open &&
                    !cancellationToken.IsCancellationRequested)
             {
-                var result = await socket.ReceiveAsync(
-                    receiveBuffer.AsMemory(),
-                    cancellationToken).ConfigureAwait(false);
+                var message = await messageReader.ReadAsync(socket, cancellationToken)
+                    .ConfigureAwait(false);
 
-                if (result.MessageType == WebSocketMessageType.Close)
+                if (message.MessageType == WebSocketMessageType.Close)
                 {
                     return;
                 }
 
-                if (result.MessageType != WebSocketMessageType.Text)
-                {
-                    continue;
-                }
-
-                messageBuffer.Write(receiveBuffer.AsSpan(0, result.Count));
-
-                if (!result.EndOfMessage)
+                if (message.MessageType != WebSocketMessageType.Text)
                 {
                     continue;
                 }
 
                 ProcessMessage(
-                    messageBuffer.WrittenMemory,
+                    message.Payload,
                     renderClock.Elapsed,
                     ref lastBookPublishedAt,
                     ref lastClusterPublishedAt);
-                messageBuffer.Clear();
             }
         }
         catch (Exception exception) when (exception is JsonException or InvalidOperationException)
@@ -176,10 +169,6 @@ public sealed class BybitPublicOrderBookClient : IPublicMarketDataClient
             throw new InvalidDataException(
                 "Bybit sent an invalid order-book message; resynchronization is required.",
                 exception);
-        }
-        finally
-        {
-            ArrayPool<byte>.Shared.Return(receiveBuffer);
         }
     }
 

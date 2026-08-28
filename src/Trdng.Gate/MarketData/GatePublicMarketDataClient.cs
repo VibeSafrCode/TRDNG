@@ -1,4 +1,3 @@
-using System.Buffers;
 using System.Diagnostics;
 using System.Net.WebSockets;
 using System.Text;
@@ -92,6 +91,10 @@ public sealed class GatePublicMarketDataClient : IPublicMarketDataClient
             {
                 break;
             }
+            catch (WebSocketMessageEnvelopeException exception)
+            {
+                ChangeState(MarketDataConnectionState.Reconnecting, exception.SafeCode);
+            }
             catch (Exception exception) when (
                 exception is WebSocketException or IOException or
                 InvalidDataException or JsonException)
@@ -130,37 +133,23 @@ public sealed class GatePublicMarketDataClient : IPublicMarketDataClient
 
     private async Task ReceiveLoopAsync(ClientWebSocket socket, CancellationToken token)
     {
-        var rented = ArrayPool<byte>.Shared.Rent(64 * 1024);
-        var buffer = new ArrayBufferWriter<byte>(64 * 1024);
+        using var messageReader = new BoundedWebSocketMessageReader();
         var clock = Stopwatch.StartNew();
         var lastBook = TimeSpan.Zero;
         var lastCluster = TimeSpan.Zero;
-        try
+        while (socket.State == WebSocketState.Open && !token.IsCancellationRequested)
         {
-            while (socket.State == WebSocketState.Open && !token.IsCancellationRequested)
+            var message = await messageReader.ReadAsync(socket, token)
+                .ConfigureAwait(false);
+            if (message.MessageType == WebSocketMessageType.Close)
             {
-                var result = await socket.ReceiveAsync(rented.AsMemory(), token)
-                    .ConfigureAwait(false);
-                if (result.MessageType == WebSocketMessageType.Close)
-                {
-                    return;
-                }
-                if (result.MessageType != WebSocketMessageType.Text)
-                {
-                    continue;
-                }
-                buffer.Write(rented.AsSpan(0, result.Count));
-                if (!result.EndOfMessage)
-                {
-                    continue;
-                }
-                Process(buffer.WrittenMemory, clock.Elapsed, ref lastBook, ref lastCluster);
-                buffer.Clear();
+                return;
             }
-        }
-        finally
-        {
-            ArrayPool<byte>.Shared.Return(rented);
+            if (message.MessageType != WebSocketMessageType.Text)
+            {
+                continue;
+            }
+            Process(message.Payload, clock.Elapsed, ref lastBook, ref lastCluster);
         }
     }
 
