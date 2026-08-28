@@ -12,9 +12,10 @@
 | Pre-separation Git bundle | VERIFIED COMPLETE | Full bundle verified before clean recreation |
 | Restore verification | NOT RUN | Recovery artifacts exist; restore procedure not executed |
 | Repository root | VERIFIED | `5780ef66b20143e918e1d88399bfe985b0c1287e` |
-| Current main / origin | VERIFIED | `3e9d9e2cfc1ab0c3dffc54aa6cb3646e4c374966`; worktree clean |
-| GitHub publication | VERIFIED | Private, no-license terminal repository published |
-| CI acceptance | VERIFIED | Run `32235655100`: Release build PASS; official tests 245/245 PASS |
+| Current main / origin | VERIFIED | `af86d2f969d75c84cc8518860be50e23b0776faf`; local `main` equals `origin/main` |
+| Current working branch | DIRTY / PUBLICATION PENDING | `codex/gpt-pro-audit-request`; MEXC diagnostics `b0af3b2`, branding `665e1c4`, PR-01 implementation `a3435bc`; closure docs pending |
+| GitHub publication | OWNER ACTION | Read-only check 2026-08-28 07:49 +05:00: `PUBLIC`, no license; no visibility change performed |
+| CI acceptance | VERIFIED HISTORICAL | Run `32383296540`: Release build PASS; official tests 269/269 PASS; current dirty branch has no CI evidence |
 | Older sprint commit IDs | PRE-SEPARATION LOCAL HISTORY | IDs in older evidence documents are preserved by the verified bundle and are not ancestors of the recreated root |
 | Tag / release | NOT RUN | Не разрешены; проверяемых идентификаторов нет |
 
@@ -30,6 +31,22 @@
   `ENVIRONMENT-LIMITED / NOT PASS`, not a product failure.
 - No authenticated/private call, `/order/test` request, production order or
   money action occurred. The app was closed after verification.
+
+## 2026-08-28 local PR-01 package
+
+- One self-contained `osx-arm64` publish replaced the existing ignored
+  `artifacts/TRDNG.app`; this is a local development package, not a release.
+- Strict deep ad-hoc codesign verification: PASS.
+- Packaged `Trdng.Desktop.dll` SHA-256:
+  `7044c51b8cc5298a87dfb5e9e31ae7a83f78748da506446f87bf53f5a394725b`.
+- Signed executable SHA-256:
+  `b6727ede95f65861c3fb712814e91eaf3fff30636e4c8cf31a1dd58360327505`.
+- The previous ignored app bundle was not backed up before replacement:
+  `BACKUP NOT RUN`. No tag, notarization, release or push was performed as part
+  of packaging.
+- Source commits created after package verification: `b0af3b2`, `665e1c4`,
+  `a3435bc`. No tag/notarization/release. Publication remained pending at this
+  entry.
 
 ## Формат backup-записи
 
