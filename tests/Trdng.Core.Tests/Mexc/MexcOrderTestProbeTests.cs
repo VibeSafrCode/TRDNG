@@ -183,6 +183,26 @@ public sealed class MexcOrderTestProbeTests
         var result = await client.TestProbeAsync(authorization);
         Assert.Equal(MexcOrderTestState.Error, result.State);
         Assert.Null(result.Evidence);
+        Assert.Equal(MexcFailureReason.ProtocolError, result.Diagnostic!.Reason);
+    }
+
+    [Fact]
+    public async Task RejectedProbeRetainsOnlySafeTypedDiagnostic()
+    {
+        var (authorization, stop) = Authorization();
+        var handler = new CaptureHandler(new(HttpStatusCode.BadRequest)
+        { Content = new StringContent("{\"code\":700007,\"msg\":\"sentinel-secret\"}") });
+        using var client = Client(handler, stop);
+        var result = await client.TestProbeAsync(authorization);
+        Assert.Equal(MexcOrderTestState.PermissionDenied, result.State);
+        Assert.Equal(new MexcDiagnostic(400, 700007,
+            MexcFailureReason.EndpointPermissionDenied), result.Diagnostic);
+        Assert.Null(result.Evidence);
+        var diagnostic = Assert.IsType<MexcDiagnostic>(result.Diagnostic);
+        Assert.DoesNotContain("sentinel", diagnostic.ToString(),
+            StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("secret", diagnostic.ToString(),
+            StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

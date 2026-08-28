@@ -72,8 +72,13 @@ public sealed class CredentialVaultTests
     [Theory]
     [InlineData(-34018, CredentialFailureCode.MissingEntitlement)]
     [InlineData(-25308, CredentialFailureCode.InteractionNotAllowed)]
+    [InlineData(-25315, CredentialFailureCode.InteractionRequired)]
     [InlineData(-50, CredentialFailureCode.InvalidParameter)]
     [InlineData(-25293, CredentialFailureCode.AuthenticationFailed)]
+    [InlineData(-128, CredentialFailureCode.UserCanceled)]
+    [InlineData(-25291, CredentialFailureCode.KeychainUnavailable)]
+    [InlineData(-25294, CredentialFailureCode.KeychainNotFound)]
+    [InlineData(-26275, CredentialFailureCode.DecodeFailure)]
     [InlineData(-777777, CredentialFailureCode.OtherOsStatus)]
     public void OsStatusMapsToAllowlistedFailureCodeWithoutRawValue(
         int osStatus, CredentialFailureCode expected)

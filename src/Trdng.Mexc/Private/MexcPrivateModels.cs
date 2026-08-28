@@ -9,6 +9,28 @@ public enum MexcPrivateState
     RateLimited, Unavailable, Error
 }
 
+public enum MexcFailureReason
+{
+    None,
+    InvalidApiKeyFormat,
+    InvalidApiKey,
+    InvalidSignature,
+    TimeWindow,
+    IpNotAllowed,
+    EndpointPermissionDenied,
+    Unauthorized,
+    AccessDenied,
+    HttpForbiddenUnknown,
+    RateLimited,
+    UpstreamUnavailable,
+    ProtocolError
+}
+
+public sealed record MexcDiagnostic(
+    int HttpStatus,
+    int? MexcCode,
+    MexcFailureReason Reason);
+
 public static class MexcPrivatePresentation
 {
     public static string Masked(MexcPrivateState state) => state switch
@@ -31,9 +53,14 @@ public sealed record MexcOpenOrder(string Symbol, string OrderId, string ClientO
     decimal Price, decimal OriginalQuantity, decimal ExecutedQuantity,
     string Status, string Side, string Type, long Time, long UpdateTime);
 
-public sealed record MexcPrivateResult<T>(MexcPrivateState State, T? Value)
+public sealed record MexcPrivateResult<T>(
+    MexcPrivateState State,
+    T? Value,
+    MexcDiagnostic? Diagnostic = null)
 {
-    public static MexcPrivateResult<T> Fail(MexcPrivateState state) => new(state, default);
+    public static MexcPrivateResult<T> Fail(
+        MexcPrivateState state,
+        MexcDiagnostic? diagnostic = null) => new(state, default, diagnostic);
 }
 
 internal static class MexcPrivateJson
@@ -66,8 +93,15 @@ internal static class MexcPrivateJson
         try
         {
             using var doc = JsonDocument.Parse(json);
-            return doc.RootElement.TryGetProperty("code", out var code) && code.TryGetInt32(out var value)
-                ? value : null;
+            if (doc.RootElement.ValueKind != JsonValueKind.Object) return null;
+            if (!doc.RootElement.TryGetProperty("code", out var code)) return null;
+            if (code.ValueKind == JsonValueKind.Number && code.TryGetInt32(out var numeric))
+                return numeric;
+            return code.ValueKind == JsonValueKind.String &&
+                int.TryParse(code.GetString(), NumberStyles.None, CultureInfo.InvariantCulture,
+                    out var parsed)
+                ? parsed
+                : null;
         }
         catch (JsonException) { return null; }
     }

@@ -285,4 +285,6 @@ public sealed class OrderTestValidatedEvidence
 }
 
 public sealed record MexcProbeExecutionResult(
-    MexcOrderTestState State, OrderTestValidatedEvidence? Evidence);
+    MexcOrderTestState State,
+    OrderTestValidatedEvidence? Evidence,
+    MexcDiagnostic? Diagnostic = null);
