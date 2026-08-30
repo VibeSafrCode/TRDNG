@@ -7,6 +7,8 @@ namespace Trdng.Mexc.MarketData;
 
 public sealed class MexcPublicOrderBookClient : IPublicMarketDataClient
 {
+    internal const int MaximumDepth1000Bytes = 2 * 1024 * 1024;
+    internal const int MaximumDepth5000Bytes = 8 * 1024 * 1024;
     private static readonly Uri WebSocketEndpoint = new("wss://wbs-api.mexc.com/ws");
     private readonly CancellationTokenSource _lifetime = new();
     private readonly HttpClient _httpClient;
@@ -146,11 +148,28 @@ public sealed class MexcPublicOrderBookClient : IPublicMarketDataClient
     private async Task<OrderBookUpdate> FetchSnapshotAsync(CancellationToken cancellationToken)
     {
         var uri = new Uri($"https://api.mexc.com/api/v3/depth?symbol={Uri.EscapeDataString(_symbol)}&limit={_depth}");
-        var json = await _httpClient.GetByteArrayAsync(uri, cancellationToken).ConfigureAwait(false);
+        var json = await FetchSnapshotBytesAsync(
+            _httpClient, uri, _depth, cancellationToken).ConfigureAwait(false);
         var snapshot = MexcDepthSnapshotParser.Parse(json, _symbol);
         DiagnosticReceived?.Invoke($"rest-snapshot symbol={snapshot.Symbol} lastUpdateId={snapshot.UpdateId}");
         return snapshot;
     }
+
+    internal static Task<byte[]> FetchSnapshotBytesAsync(
+        HttpClient httpClient,
+        Uri uri,
+        int depth,
+        CancellationToken cancellationToken = default) =>
+        BoundedHttpContentReader.GetJsonBytesAsync(
+            httpClient,
+            uri,
+            depth switch
+            {
+                1000 => MaximumDepth1000Bytes,
+                5000 => MaximumDepth5000Bytes,
+                _ => throw new ArgumentOutOfRangeException(nameof(depth))
+            },
+            cancellationToken);
 
     private async Task SubscribeAsync(ClientWebSocket socket, CancellationToken cancellationToken)
     {

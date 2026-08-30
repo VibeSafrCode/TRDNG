@@ -155,3 +155,13 @@ instead of silently truncating data. Visual and trading behavior were not
 expanded. Evidence: [`pr02-bounded-memory-evidence.md`](pr02-bounded-memory-evidence.md).
 GitHub CI `33298030728` passed the Release build and 309/309 tests; pull request
 `#7` merged as `c8e2362cb2b9c06cfaf4c914225ca7f5ceb9c757`.
+
+## Audit PR-03 status — implementation complete / CI pending
+
+Public Bybit/Gate/MEXC metadata, catalogs and the MEXC REST depth snapshot now
+use one pooled bounded reader with endpoint-specific caps, JSON media-type gate,
+safe error codes, five-second production timeout and explicit no-redirect/no-
+cookie policy. Exact implementation commit: `89e645e`. Local Release build and
+package/codesign PASS; the one official local VSTest attempt remained sandbox
+IPC-blocked. Evidence: [`pr03-bounded-http-evidence.md`](pr03-bounded-http-evidence.md).
+PR-04 memory soak remains a separate HIGH sprint.

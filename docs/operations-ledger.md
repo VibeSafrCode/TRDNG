@@ -13,7 +13,7 @@
 | Restore verification | NOT RUN | Recovery artifacts exist; restore procedure not executed |
 | Repository root | VERIFIED | `5780ef66b20143e918e1d88399bfe985b0c1287e` |
 | Current main / origin | VERIFIED | PR-02 merged as `c8e2362cb2b9c06cfaf4c914225ca7f5ceb9c757` |
-| Current working branch | VERIFIED | local `main` equals `origin/main` before this factual docs-only update |
+| Current working branch | VERIFIED | `codex/bounded-public-http`; implementation `89e645e`, publication pending |
 | GitHub publication | VERIFIED PUBLIC | Read-only check 2026-08-30: `PUBLIC`, default branch `main`; no visibility change performed in PR-02 |
 | CI acceptance | VERIFIED | PR-02 run `33298030728`: Release build PASS; official tests 309/309 PASS |
 | Older sprint commit IDs | PRE-SEPARATION LOCAL HISTORY | IDs in older evidence documents are preserved by the verified bundle and are not ancestors of the recreated root |
@@ -61,6 +61,18 @@
   `75da43b19cae768db5ff51336f009d240c762734931b1631224dba45672e9450`.
 - Backup, GUI, notarization, tag and release: NOT RUN. PR-02 source/evidence
   commit `c7f3ce0` passed PR `#7` CI and merged in `c8e2362`.
+
+## 2026-08-30 local PR-03 package
+
+- One effective self-contained `osx-arm64` publish replaced only the existing
+  ignored `artifacts/TRDNG.app`; this is not a release.
+- Strict deep ad-hoc codesign verification: PASS.
+- Packaged `Trdng.Core.dll` SHA-256:
+  `4eaa90c921c539ea3ccae25853b1240fd784ddde61cbf0f42403b3f63fe369ac`.
+- Signed packaged executable SHA-256:
+  `91026b011e7b55376dec773471be3a542d8ee8aa4685a9a6a90279c3d25e4a9c`.
+- Backup, GUI, live network, notarization, tag and release: NOT RUN.
+- Implementation commit `89e645e`; GitHub push/PR/CI/merge: PENDING.
 
 ## Формат backup-записи
 

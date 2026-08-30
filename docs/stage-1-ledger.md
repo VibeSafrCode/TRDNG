@@ -453,3 +453,21 @@ Baseline зафиксирован: 2026-08-02 11:31 +05:00.
   `main` as `c8e2362cb2b9c06cfaf4c914225ca7f5ceb9c757`.
 - GUI/live/private/authenticated/order/money action: NOT RUN. PR-03 and PR-04
   remain separate future scopes.
+
+## Audit PR-03 bounded public HTTP — IMPLEMENTED / CI PENDING
+
+- Branch `codex/bounded-public-http`, implementation commit `89e645e`.
+- Shared pooled reader performs `ResponseHeadersRead`, `Content-Length`
+  precheck and streamed `max + 1`; failures are payload-free.
+- Endpoint caps: Bybit 4 MiB/page, Gate 8 MiB, MEXC exchange info 8 MiB, MEXC
+  depth 2 MiB at 1,000 and 8 MiB at 5,000.
+- JSON media type is required; the production public transport uses timeout 5s,
+  no redirects and no cookies. Private/trading paths were not changed.
+- Targeted test assembly compile PASS. One official local VSTest attempt:
+  BLOCKED before runtime by known sandbox IPC, no retry. Full Release build:
+  PASS, 0 warnings/errors.
+- Existing app package and strict codesign PASS. `Trdng.Core.dll` SHA-256:
+  `4eaa90c921c539ea3ccae25853b1240fd784ddde61cbf0f42403b3f63fe369ac`;
+  executable: `91026b011e7b55376dec773471be3a542d8ee8aa4685a9a6a90279c3d25e4a9c`.
+- GUI/live/private/authenticated/order/money: NOT RUN. GitHub CI/PR/merge:
+  PENDING. PR-04 soak remains separate HIGH scope.

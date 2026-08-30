@@ -1,12 +1,13 @@
 using System.Globalization;
-using System.Net.Http.Json;
 using System.Text.Json;
 using Trdng.Core.Instruments;
+using Trdng.Core.MarketData;
 
 namespace Trdng.Bybit.MarketData;
 
 public sealed class BybitInstrumentMetadataClient(HttpClient httpClient)
 {
+    internal const int MaximumInstrumentPageBytes = 4 * 1024 * 1024;
     private static readonly Uri Endpoint =
         new("https://api.bybit.com/v5/market/instruments-info");
 
@@ -17,7 +18,8 @@ public sealed class BybitInstrumentMetadataClient(HttpClient httpClient)
         ArgumentException.ThrowIfNullOrWhiteSpace(symbol);
         var uri = new Uri(
             $"{Endpoint}?category=linear&symbol={Uri.EscapeDataString(symbol.ToUpperInvariant())}");
-        var json = await httpClient.GetByteArrayAsync(uri, cancellationToken)
+        var json = await BoundedHttpContentReader.GetJsonBytesAsync(
+            httpClient, uri, MaximumInstrumentPageBytes, cancellationToken)
             .ConfigureAwait(false);
         return ParseTickSize(json, symbol);
     }
@@ -31,8 +33,10 @@ public sealed class BybitInstrumentMetadataClient(HttpClient httpClient)
         {
             var suffix = string.IsNullOrEmpty(cursor) ? string.Empty :
                 $"&cursor={Uri.EscapeDataString(cursor)}";
-            var json = await httpClient.GetByteArrayAsync(
+            var json = await BoundedHttpContentReader.GetJsonBytesAsync(
+                httpClient,
                 new Uri($"{Endpoint}?category=linear&status=Trading&limit=1000{suffix}"),
+                MaximumInstrumentPageBytes,
                 cancellationToken).ConfigureAwait(false);
             var parsed = ParseCatalogPage(json);
             entries.AddRange(parsed.Entries);

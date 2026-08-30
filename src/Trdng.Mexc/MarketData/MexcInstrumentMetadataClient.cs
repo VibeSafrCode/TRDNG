@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 using Trdng.Core.Instruments;
+using Trdng.Core.MarketData;
 
 namespace Trdng.Mexc.MarketData;
 
@@ -25,6 +26,7 @@ public sealed record MexcCatalogParseResult(
 
 public sealed class MexcInstrumentMetadataClient(HttpClient httpClient)
 {
+    internal const int MaximumExchangeInfoBytes = 8 * 1024 * 1024;
     private static readonly Uri Endpoint =
         new("https://api.mexc.com/api/v3/exchangeInfo");
 
@@ -34,8 +36,10 @@ public sealed class MexcInstrumentMetadataClient(HttpClient httpClient)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(symbol);
         var normalized = symbol.ToUpperInvariant();
-        var json = await httpClient.GetByteArrayAsync(
+        var json = await BoundedHttpContentReader.GetJsonBytesAsync(
+            httpClient,
             new Uri($"{Endpoint}?symbol={Uri.EscapeDataString(normalized)}"),
+            MaximumExchangeInfoBytes,
             cancellationToken).ConfigureAwait(false);
         return Parse(json, normalized);
     }
@@ -47,7 +51,8 @@ public sealed class MexcInstrumentMetadataClient(HttpClient httpClient)
     public async Task<MexcCatalogParseResult> GetSpotCatalogResultAsync(
         CancellationToken cancellationToken = default)
     {
-        var json = await httpClient.GetByteArrayAsync(Endpoint, cancellationToken)
+        var json = await BoundedHttpContentReader.GetJsonBytesAsync(
+            httpClient, Endpoint, MaximumExchangeInfoBytes, cancellationToken)
             .ConfigureAwait(false);
         var result = ParseCatalogResult(json);
         if (result.Entries.Count == 0)

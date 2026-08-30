@@ -37,10 +37,8 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
     private readonly SelectionGeneration _generation = new();
     private long _latestRequestId;
     private readonly VenueLiquidityTrackers _liquidityTrackers = new();
-    private readonly HttpClient _metadataHttpClient = new()
-    {
-        Timeout = TimeSpan.FromSeconds(5)
-    };
+    private readonly HttpClient _metadataHttpClient =
+        PublicHttpTransport.CreateClient(TimeSpan.FromSeconds(5));
     private CancellationTokenSource _metadataLifetime = new();
     private readonly MarketDataFreshnessOptions _freshness;
     private readonly DispatcherTimer _healthTimer;
