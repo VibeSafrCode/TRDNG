@@ -87,6 +87,27 @@ public sealed class BybitOrderBookSessionTests
         Assert.Equal(12, session.Engine.LastUpdateId);
     }
 
+    [Fact]
+    public void CapacityViolationRequiresResynchronizationAndClearsBook()
+    {
+        var session = new BybitOrderBookSession(new OrderBookEngine(
+            new OrderBookCapacityPolicy(1, 2)));
+        session.Apply(Message(
+            BybitOrderBookMessageType.Snapshot,
+            10,
+            bids: [new(100, 1)],
+            asks: [new(101, 1)]));
+
+        var result = session.Apply(Message(
+            BybitOrderBookMessageType.Delta,
+            11,
+            bids: [new(99, 1)]));
+
+        Assert.Equal(OrderBookApplyResult.ResyncRequired, result);
+        Assert.Equal(OrderBookSessionState.ResyncRequired, session.State);
+        Assert.False(session.Engine.HasSnapshot);
+    }
+
     private static BybitOrderBookMessage Message(
         BybitOrderBookMessageType type,
         long updateId,

@@ -102,3 +102,12 @@ had been performed.
   branch remained `main` and was not changed.
 - No GitHub CI run was created because the workflow triggers only for `main` push
   or pull request. PR, merge and release remain `NOT RUN`.
+
+## Final acceptance update
+
+- Pull request `#6` was independently checked and merged.
+- GitHub CI run `33296738736`: Release build PASS; official deterministic suite
+  295/295 PASS, 0 failed, 0 skipped.
+- Merge commit on `main`:
+  `f69d1a1f59c18546d8e5cdaa2683f64caf78f691`.
+- Tag, notarization and production release remain NOT RUN.

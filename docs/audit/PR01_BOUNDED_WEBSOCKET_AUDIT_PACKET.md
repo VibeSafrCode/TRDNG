@@ -65,3 +65,12 @@ this review. Those are separate audit PRs.
   published to public branch `codex/gpt-pro-audit-request`. Remote SHA verification
   passed. CI was not triggered because this was neither `main` nor a pull request;
   PR/merge/release remain `NOT RUN`.
+
+## Superseding acceptance
+
+- Pull request `#6` merged to `main` as
+  `f69d1a1f59c18546d8e5cdaa2683f64caf78f691`.
+- GitHub CI `33296738736`: Release build PASS; official deterministic suite
+  295/295 PASS, 0 failed, 0 skipped.
+- This packet is retained as the historical PR-01 review scope. Current review
+  entry point is PR-02 in the audit index.

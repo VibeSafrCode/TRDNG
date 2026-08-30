@@ -410,7 +410,7 @@ Baseline зафиксирован: 2026-08-02 11:31 +05:00.
   not create an order or change money. The final typed diagnostic rerun remains
   `OPEN`; production `/api/v3/order` remains absent.
 
-## Audit PR-01 bounded WebSocket envelope — IMPLEMENTED / AUDIT OPEN
+## Audit PR-01 bounded WebSocket envelope — ACCEPTED / MERGED
 
 - Date: 2026-08-28. Scope is only the first code task from the imported external
   audit: one 1 MiB complete-message envelope shared by Bybit, Gate and MEXC.
@@ -423,8 +423,8 @@ Baseline зафиксирован: 2026-08-02 11:31 +05:00.
 - Full Release solution build: PASS, 0 warnings/errors. One osx-arm64 package and
   strict ad-hoc codesign: PASS. GUI/live/private/auth/order/money: NOT RUN.
 - Evidence: [`pr01-bounded-websocket-evidence.md`](pr01-bounded-websocket-evidence.md).
-- Implementation is isolated in local commit `a3435bc`; independent review,
-  push and GitHub CI remain separate gates.
+- Implementation is isolated in commit `a3435bc`; final PR/CI/merge evidence is
+  recorded in the acceptance subsection below.
 
 ### PR-01 publication
 
@@ -433,3 +433,19 @@ Baseline зафиксирован: 2026-08-02 11:31 +05:00.
   `codex/gpt-pro-audit-request`; remote SHA verification: PASS.
 - `main` was not changed. No PR/merge/release. No CI run was created because the
   current workflow listens only to `main` pushes and pull requests.
+
+### PR-01 acceptance and PR-02 bounded-memory implementation
+
+- PR-01 pull request `#6` passed GitHub CI run `33296738736`: Release build PASS;
+  official deterministic suite 295/295 PASS. It was merged to `main` as
+  `f69d1a1f59c18546d8e5cdaa2683f64caf78f691`.
+- PR-02 is implemented locally on `codex/bounded-orderbook-memory`: bounded
+  order-book snapshots/deltas, explicit venue resync, bounded MEXC pre-snapshot
+  levels, bounded current cluster intervals and core capacity metrics.
+- Targeted test assembly and final Release solution build: PASS, 0 warnings/
+  errors. Local runtime tests remain NOT RUN because the official runner is
+  sandbox IPC-blocked and a temporary runner stalled before execution.
+- One local app package and strict codesign: PASS. Evidence:
+  [`pr02-bounded-memory-evidence.md`](pr02-bounded-memory-evidence.md).
+- PR-02 independent audit, commit, push, pull request, GitHub CI and merge remain
+  separate pending gates. No GUI/live/private/authenticated/order/money action.

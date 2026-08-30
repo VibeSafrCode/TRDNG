@@ -28,4 +28,7 @@ Before sharing this folder for a new sprint audit, complete
 prompt with the current accepted scope, exact evidence and open debt.
 
 Current implementation-review entry point:
+[PR02_BOUNDED_MEMORY_AUDIT_PACKET.md](PR02_BOUNDED_MEMORY_AUDIT_PACKET.md).
+
+Previous accepted review packet:
 [PR01_BOUNDED_WEBSOCKET_AUDIT_PACKET.md](PR01_BOUNDED_WEBSOCKET_AUDIT_PACKET.md).

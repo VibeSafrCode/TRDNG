@@ -12,10 +12,10 @@
 | Pre-separation Git bundle | VERIFIED COMPLETE | Full bundle verified before clean recreation |
 | Restore verification | NOT RUN | Recovery artifacts exist; restore procedure not executed |
 | Repository root | VERIFIED | `5780ef66b20143e918e1d88399bfe985b0c1287e` |
-| Current main / origin | VERIFIED | `af86d2f969d75c84cc8518860be50e23b0776faf`; local `main` equals `origin/main` |
-| Current working branch | PUBLISHED / REVIEW OPEN | Public `codex/gpt-pro-audit-request`; MEXC diagnostics `b0af3b2`, branding `665e1c4`, PR-01 implementation `a3435bc`, evidence through `8f88ffb` |
-| GitHub publication | OWNER ACTION | Read-only check 2026-08-28 07:49 +05:00: `PUBLIC`, no license; no visibility change performed |
-| CI acceptance | VERIFIED HISTORICAL | Run `32383296540`: Release build PASS; official tests 269/269 PASS; current dirty branch has no CI evidence |
+| Current main / origin | VERIFIED | PR-01 merged as `f69d1a1f59c18546d8e5cdaa2683f64caf78f691` |
+| Current working branch | LOCAL / AUDIT OPEN | `codex/bounded-orderbook-memory`; PR-02 exact diff uncommitted |
+| GitHub publication | VERIFIED PUBLIC | Read-only check 2026-08-30: `PUBLIC`, default branch `main`; no visibility change performed in PR-02 |
+| CI acceptance | VERIFIED BASELINE | PR-01 run `33296738736`: Release build PASS; official tests 295/295 PASS; current PR-02 diff has no CI evidence |
 | Older sprint commit IDs | PRE-SEPARATION LOCAL HISTORY | IDs in older evidence documents are preserved by the verified bundle and are not ancestors of the recreated root |
 | Tag / release | NOT RUN | Не разрешены; проверяемых идентификаторов нет |
 
@@ -49,6 +49,18 @@
   at `8f88ffbb961f21b7764b81e9920e578406580a1c`. No PR, merge, tag,
   notarization or release. Branch push did not trigger CI under current workflow
   rules.
+
+## 2026-08-30 local PR-02 package
+
+- One self-contained `osx-arm64` publish replaced only the existing ignored
+  `artifacts/TRDNG.app`; this is not a release.
+- Strict deep ad-hoc codesign verification: PASS.
+- Packaged `Trdng.Core.dll` SHA-256:
+  `91c10efed8dfd9cbcb7cfaa36cea62fc42f36abae518aa30f3896af8b39893c8`.
+- Signed executable SHA-256:
+  `75da43b19cae768db5ff51336f009d240c762734931b1631224dba45672e9450`.
+- Backup, GUI, notarization, tag and release: NOT RUN. PR-02 source remains
+  uncommitted pending independent audit.
 
 ## Формат backup-записи
 
