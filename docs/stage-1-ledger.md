@@ -507,3 +507,24 @@ Baseline зафиксирован: 2026-08-02 11:31 +05:00.
   `33302487008`: Release build PASS, 0 warnings/errors, official suite 327/327
   PASS. Merged to `main` as
   `2e7d9218c2db462bd0b45ec9f372462b1945cd00`.
+
+## S1.7 adaptive independent books — LOCAL COMPLETE / AUDIT PENDING
+
+- Branch `codex/adaptive-orderbooks`, baseline
+  `b7b0e7060f4c00d7fcb072d78f02dfb59be2ee9e`.
+- BTC default; public perpetual cards for MEXC/Gate/Bybit; MEXC private trading
+  remains blocked. Credential-free BTC client smoke: 200/200, 50/50 and 200/200
+  levels respectively.
+- Per-book auto/manual depth, trackpad step, manual/automatic volume reference
+  and four colors are implemented. Visible ask/bid maxima normalize separately.
+- Founder-reported spread overlap was corrected with reserved layout height and
+  explicit four-pixel gaps above/below the spread strip.
+- Targeted assembly compile and final Release solution build: PASS, 0 warnings/
+  errors. One official local VSTest attempt was IPC-blocked before runtime and
+  not retried.
+- Final app package/codesign and exact BTC startup: PASS. Final post-data visual
+  acceptance remains OPEN because Computer Use timed out after population.
+- Evidence: [`s1.7-adaptive-orderbooks-evidence.md`](s1.7-adaptive-orderbooks-evidence.md).
+  Audit packet: [`audit/S17_ADAPTIVE_ORDERBOOKS_AUDIT_PACKET.md`](audit/S17_ADAPTIVE_ORDERBOOKS_AUDIT_PACKET.md).
+- Commit, push, PR, CI, merge, tag, notarization and release: NOT RUN. Git
+  publication remains a separate Founder gate.

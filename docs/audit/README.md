@@ -28,7 +28,7 @@ Before sharing this folder for a new sprint audit, complete
 prompt with the current accepted scope, exact evidence and open debt.
 
 Current implementation-review entry point:
-[PR04_MEMORY_OBSERVABILITY_AUDIT_PACKET.md](PR04_MEMORY_OBSERVABILITY_AUDIT_PACKET.md).
+[S17_ADAPTIVE_ORDERBOOKS_AUDIT_PACKET.md](S17_ADAPTIVE_ORDERBOOKS_AUDIT_PACKET.md).
 
 Previous accepted review packet:
-[PR03_BOUNDED_HTTP_AUDIT_PACKET.md](PR03_BOUNDED_HTTP_AUDIT_PACKET.md).
+[PR04_MEMORY_OBSERVABILITY_AUDIT_PACKET.md](PR04_MEMORY_OBSERVABILITY_AUDIT_PACKET.md).

@@ -28,11 +28,9 @@ public sealed class VenueCardLayoutTests
     }
 
     [Fact]
-    public void PerpetualIncludesGateAndBybitButNotMexc()
+    public void PerpetualIncludesMexcGateAndBybitPublicBooks()
     {
         var cards = VenueCardLayout.Build(new CanonicalInstrument("APT", "USDT", MarketProduct.Perpetual));
-        Assert.False(cards[0].MarketDataAvailable);
-        Assert.True(cards[1].MarketDataAvailable);
-        Assert.True(cards[2].MarketDataAvailable);
+        Assert.All(cards, card => Assert.True(card.MarketDataAvailable));
     }
 }

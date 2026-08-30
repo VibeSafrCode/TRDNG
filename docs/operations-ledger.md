@@ -98,6 +98,22 @@
   `33302487008` PASS with 327/327 official tests. Merged to `main` as
   `2e7d9218c2db462bd0b45ec9f372462b1945cd00`.
 
+## 2026-08-30 local S1.7 adaptive-books package
+
+- Branch `codex/adaptive-orderbooks`; baseline
+  `b7b0e7060f4c00d7fcb072d78f02dfb59be2ee9e`; implementation remains
+  uncommitted pending independent audit.
+- Final Release solution build: PASS, 0 warnings/errors. One official local
+  VSTest attempt was IPC-blocked before execution and not retried.
+- One final self-contained `osx-arm64` synchronization replaced only the
+  existing ignored `artifacts/TRDNG.app`; strict deep ad-hoc codesign: PASS.
+- Packaged `Trdng.Desktop.dll` SHA-256:
+  `467f9b7c706bcfc7adeefbaccaaa956d0ee1ff59d3d0489bf797d2dd223f9c9d`.
+- Signed executable SHA-256:
+  `84a68a4bf460885bac170fd82a4b0ed6f8843c7f456635c9a32667b87e5427a8`.
+- Exact package startup with BTC default: PASS. Populated-book final screenshot,
+  Git publication, CI, backup/restore, notarization, tag and release: NOT RUN.
+
 ## Формат backup-записи
 
 `ID | состав | путь | UTC-время | размер | SHA-256 | retention | разрешение | restore evidence | статус`

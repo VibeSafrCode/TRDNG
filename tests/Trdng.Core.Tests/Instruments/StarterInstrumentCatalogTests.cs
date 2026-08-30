@@ -88,6 +88,7 @@ public sealed class StarterInstrumentCatalogTests
             TradingVenue.Mexc);
 
         Assert.NotNull(capability);
+        Assert.Equal(CapabilityAvailability.Available, capability.MarketData);
         Assert.Equal(CapabilityAvailability.Blocked, capability.Trading);
         Assert.False(capability.CanTrade);
     }

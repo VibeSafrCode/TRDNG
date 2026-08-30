@@ -18,7 +18,7 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
 {
     private BybitPublicOrderBookClient? _client;
     private GatePublicMarketDataClient? _gateClient;
-    private MexcPublicOrderBookClient? _mexcClient;
+    private IPublicMarketDataClient? _mexcClient;
     private readonly MarketSelectionController _selectionController;
     private readonly PublicInstrumentCatalog _publicCatalog = new();
     private DateTimeOffset? _catalogLoadedAt;
@@ -37,7 +37,9 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
     private readonly SelectionGeneration _generation = new();
     private long _latestRequestId;
     private readonly VenueLiquidityTrackers _liquidityTrackers = new();
-    private readonly HttpClient _metadataHttpClient =
+    private readonly HttpClient _catalogHttpClient =
+        PublicHttpTransport.CreateClient(TimeSpan.FromSeconds(15));
+    private readonly HttpClient _publicMarketDataHttpClient =
         PublicHttpTransport.CreateClient(TimeSpan.FromSeconds(5));
     private CancellationTokenSource _metadataLifetime = new();
     private readonly MarketDataFreshnessOptions _freshness;
@@ -62,10 +64,10 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
             new Dictionary<(LiquiditySide, decimal), LiquidityLevelState>();
     private decimal? _bybitTickSize;
     private decimal? _gateTickSize;
+    private decimal? _mexcTickSize;
     private IReadOnlyDictionary<(LiquiditySide Side, decimal Price), LiquidityLevelState>
         _latestGateLiquidity =
             new Dictionary<(LiquiditySide, decimal), LiquidityLevelState>();
-    private int _densityIndex = 1;
     private int _scaleEligibilityMask = -1;
     private readonly DryRunOrderFactory _dryRunOrderFactory =
         new(new ClientOrderIdGenerator());
@@ -81,12 +83,6 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
     private readonly ICredentialVault _credentialVault;
     private readonly CredentialPairController _readOnlyCredentials;
     private readonly CredentialPairController _orderTestCredentials;
-    private static readonly int[] DepthOptions = [8, 12, 18, 24];
-    // Every density fits inside one half of the 720px default window.
-    // This prevents the nearest ask/bid row from painting beneath the spread.
-    private static readonly double[] RowHeights = [32, 22, 15, 11];
-    private static readonly double[] TextSizes = [16, 14, 11, 9];
-
     public MainViewModel() : this(MarketDataFreshnessOptions.ScalpingDefault)
     {
     }
@@ -115,6 +111,9 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
             : "JOURNAL BLOCKED · FAIL CLOSED";
         _selectionController = new MarketSelectionController(CreateClient, _publicCatalog.Find);
         _selectionController.Resetting += OnSelectionResetting;
+        MexcBookSettings.Changed += RebuildBook;
+        GateBookSettings.Changed += RebuildBook;
+        BybitBookSettings.Changed += RebuildBook;
         _healthTimer = new DispatcherTimer
         {
             Interval = TimeSpan.FromMilliseconds(500)
@@ -138,6 +137,15 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
     public ObservableCollection<BookLevelViewModel> MexcAsks { get; } = [];
 
     public ObservableCollection<BookLevelViewModel> MexcBids { get; } = [];
+
+    public VenueBookSettingsViewModel MexcBookSettings { get; } =
+        new(TradingVenue.Mexc, 200);
+
+    public VenueBookSettingsViewModel GateBookSettings { get; } =
+        new(TradingVenue.Gate, 50);
+
+    public VenueBookSettingsViewModel BybitBookSettings { get; } =
+        new(TradingVenue.Bybit, 200);
 
     [ObservableProperty]
     public partial string ConnectionStatus { get; set; } = "CONNECTING";
@@ -183,13 +191,10 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
     public partial string CrossVenueDivergenceColor { get; set; } = "#8B93A1";
 
     [ObservableProperty]
-    public partial string SharedScaleLabel { get; set; } = "ОБЩАЯ ШКАЛА: —";
+    public partial string SharedScaleLabel { get; set; } = "НЕЗАВИСИМЫЕ ШКАЛЫ: —";
 
     [ObservableProperty]
-    public partial string DepthLabel { get; set; } = "12 УРОВНЕЙ";
-
-    [ObservableProperty]
-    public partial string SelectedAsset { get; set; } = "APT";
+    public partial string SelectedAsset { get; set; } = "BTC";
 
     [ObservableProperty]
     public partial string SelectedQuote { get; set; } = "USDT";
@@ -203,25 +208,25 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
     public ObservableCollection<string> InstrumentSearchResults { get; } = [];
 
     [ObservableProperty]
-    public partial string InstrumentTitle { get; set; } = "APT / USDT · PERPETUAL";
+    public partial string InstrumentTitle { get; set; } = "BTC / USDT · PERPETUAL";
 
     [ObservableProperty]
     public partial string ProductLabel { get; set; } = "PERPETUAL";
 
     [ObservableProperty]
-    public partial string BybitCardTitle { get; set; } = "BYBIT · APTUSDT · PERPETUAL";
+    public partial string BybitCardTitle { get; set; } = "BYBIT · BTCUSDT · PERPETUAL";
 
     [ObservableProperty]
-    public partial string GateCardTitle { get; set; } = "GATE · APT_USDT · PERPETUAL";
+    public partial string GateCardTitle { get; set; } = "GATE · BTC_USDT · PERPETUAL";
 
     [ObservableProperty]
-    public partial string MexcConnectionStatus { get; set; } = "UNAVAILABLE";
+    public partial string MexcConnectionStatus { get; set; } = "CONNECTING";
 
     [ObservableProperty]
-    public partial string MexcCardTitle { get; set; } = "MEXC · APT_USDT · PERPETUAL";
+    public partial string MexcCardTitle { get; set; } = "MEXC · BTC_USDT · PERPETUAL";
 
     [ObservableProperty]
-    public partial string MexcEmptyState { get; set; } = "PUBLIC PERPETUAL НЕ РЕАЛИЗОВАН";
+    public partial string MexcEmptyState { get; set; } = "ПОДКЛЮЧЕНИЕ К ПУБЛИЧНОМУ СТАКАНУ…";
 
     [ObservableProperty]
     public partial string GateEmptyState { get; set; } = string.Empty;
@@ -245,7 +250,7 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
     public partial string DryRunPreview { get; set; } = "МОДЕЛИРОВАНИЕ · METADATA REQUIRED";
 
     [ObservableProperty]
-    public partial string DryRunRoute { get; set; } = "GATE · APT_USDT · PERPETUAL";
+    public partial string DryRunRoute { get; set; } = "GATE · BTC_USDT · PERPETUAL";
 
     [ObservableProperty]
     public partial string DryRunRiskState { get; set; } = "STOP · ENGAGED";
@@ -382,7 +387,7 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
 
             _client = _selectionController.Clients.OfType<BybitPublicOrderBookClient>().SingleOrDefault();
             _gateClient = _selectionController.Clients.OfType<GatePublicMarketDataClient>().SingleOrDefault();
-            _mexcClient = _selectionController.Clients.OfType<MexcPublicOrderBookClient>().SingleOrDefault();
+            _mexcClient = _selectionController.Clients.SingleOrDefault(client => client.Venue == "MEXC");
             AttachClients();
             _metadataLifetime = new CancellationTokenSource();
             _ = LoadInstrumentMetadataSafelyAsync(
@@ -679,23 +684,28 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
         return ExecutableReferencePrice.Select(snapshot, _dryRunSide, observedAt);
     }
 
-    public void ShowMoreDepth()
+    public void UpdateBookViewport(TradingVenue venue, double width, double totalHeight)
     {
-        if (_densityIndex < DepthOptions.Length - 1)
-        {
-            _densityIndex++;
-            RebuildBook();
-        }
+        const double headerAndSpreadHeight = 80;
+        var halfHeight = Math.Max(0,
+            (totalHeight - headerAndSpreadHeight) / 2 -
+            BookDisplayPolicy.SpreadSafetyMarginPerSide);
+        BookSettings(venue).SetViewport(width, halfHeight);
     }
 
-    public void ShowLessDepth()
+    public void AdjustBookDepth(TradingVenue venue, int direction) =>
+        BookSettings(venue).AdjustDepth(direction);
+
+    public void ResetBookPalette(TradingVenue venue) =>
+        BookSettings(venue).ResetPalette();
+
+    private VenueBookSettingsViewModel BookSettings(TradingVenue venue) => venue switch
     {
-        if (_densityIndex > 0)
-        {
-            _densityIndex--;
-            RebuildBook();
-        }
-    }
+        TradingVenue.Mexc => MexcBookSettings,
+        TradingVenue.Gate => GateBookSettings,
+        TradingVenue.Bybit => BybitBookSettings,
+        _ => throw new ArgumentOutOfRangeException(nameof(venue))
+    };
 
     public async ValueTask DisposeAsync()
     {
@@ -704,12 +714,16 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
         {
             _healthTimer.Stop();
             _healthTimer.Tick -= HealthTimerOnTick;
+            MexcBookSettings.Changed -= RebuildBook;
+            GateBookSettings.Changed -= RebuildBook;
+            BybitBookSettings.Changed -= RebuildBook;
             await _metadataLifetime.CancelAsync();
             DetachClients();
             _selectionController.Resetting -= OnSelectionResetting;
             await _selectionController.DisposeAsync();
             _metadataLifetime.Dispose();
-            _metadataHttpClient.Dispose();
+            _catalogHttpClient.Dispose();
+            _publicMarketDataHttpClient.Dispose();
         }
         finally
         {
@@ -730,8 +744,9 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
         {
             if (!_generation.IsCurrent(expectedGeneration)) return;
             RebuildBook();
-            UpdateConsensus(DepthOptions[_densityIndex]);
+            UpdateConsensus(VisibleConsensusDepth());
             UpdateCrossVenueComparison();
+            BybitEmptyState = string.Empty;
 
             LastPrice = snapshot.BestBid is { } bid ? FormatPrice(bid) : "—";
             Spread = snapshot.Spread is { } spread ? FormatPrice(spread) : "—";
@@ -740,131 +755,102 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
 
     private void RebuildBook()
     {
-        var depth = DepthOptions[_densityIndex];
-        var rowHeight = RowHeights[_densityIndex];
-        var textSize = TextSizes[_densityIndex];
-        var comparableBooks = SharedScaleBookSelection.Select(
-            SelectedProduct,
-            new(_mexcState, _latestMexcSnapshot, _latestMexcSnapshotAt),
-            new(_gateState, _latestGateSnapshot, _latestGateSnapshotAt),
-            new(_bybitState, _latestSnapshot, _latestSnapshotAt),
-            DateTimeOffset.UtcNow,
-            _freshness);
-        var scale = SharedPriceScale.Build(
-            comparableBooks.ElementAtOrDefault(0),
-            comparableBooks.ElementAtOrDefault(1),
-            depth,
-            InstrumentTickSize.Resolve(_bybitTickSize, _gateTickSize));
-        if (scale is null)
-        {
-            Asks.Clear();
-            Bids.Clear();
-            GateAsks.Clear();
-            GateBids.Clear();
-            MexcAsks.Clear();
-            MexcBids.Clear();
-            SharedScaleLabel = "ОБЩАЯ ШКАЛА: —";
-            UpdateConsensus(depth);
-            return;
-        }
+        var now = DateTimeOffset.UtcNow;
+        var bybitScale = SelectedProduct == MarketProduct.Perpetual &&
+            SharedScaleBookSelection.IsEligible(_bybitState, _latestSnapshot,
+                _latestSnapshotAt, now, _freshness)
+            ? SharedPriceScale.Build(_latestSnapshot, null,
+                BybitBookSettings.Layout.Depth, _bybitTickSize)
+            : null;
+        var gateScale = SelectedProduct == MarketProduct.Perpetual &&
+            SharedScaleBookSelection.IsEligible(_gateState, _latestGateSnapshot,
+                _latestGateSnapshotAt, now, _freshness)
+            ? SharedPriceScale.Build(_latestGateSnapshot, null,
+                GateBookSettings.Layout.Depth, _gateTickSize)
+            : null;
+        var mexcScale =
+            SharedScaleBookSelection.IsEligible(_mexcState, _latestMexcSnapshot,
+                _latestMexcSnapshotAt, now, _freshness)
+            ? SharedPriceScale.Build(_latestMexcSnapshot, null,
+                MexcBookSettings.Layout.Depth, _mexcTickSize)
+            : null;
 
-        RebuildBybit(scale, rowHeight, textSize);
-        RebuildGate(scale, rowHeight, textSize);
-        RebuildMexc(scale, rowHeight, textSize);
-        UpdateConsensus(depth);
-        DepthLabel = $"{depth} УРОВНЕЙ";
-        var officialTick =
-            InstrumentTickSize.Resolve(_bybitTickSize, _gateTickSize);
-        var source = officialTick == scale.TickSize ? "OFFICIAL" : "FALLBACK";
-        var scaleKind = comparableBooks.Count >= 2 ? "ОБЩАЯ ШКАЛА" : "ШКАЛА ОДНОЙ БИРЖИ";
-        SharedScaleLabel = $"{scaleKind} · TICK {FormatPrice(scale.TickSize)} · {source}";
+        RebuildBybit(bybitScale);
+        RebuildGate(gateScale);
+        RebuildMexc(mexcScale);
+        UpdateConsensus(VisibleConsensusDepth());
+        SharedScaleLabel = bybitScale is null && gateScale is null && mexcScale is null
+            ? "НЕЗАВИСИМЫЕ ШКАЛЫ: —"
+            : "НЕЗАВИСИМЫЕ ШКАЛЫ · ГЛУБИНА И ОБЪЁМ В ⚙ КАЖДОГО СТАКАНА";
     }
 
-    private void RebuildBybit(
-        SharedPriceScale scale,
-        double rowHeight,
-        double textSize)
+    private int VisibleConsensusDepth() => Math.Max(
+        MexcBookSettings.Layout.Depth,
+        Math.Max(GateBookSettings.Layout.Depth, BybitBookSettings.Layout.Depth));
+
+    private void RebuildBybit(SharedPriceScale? scale)
     {
-        if (SelectedProduct != MarketProduct.Perpetual ||
-            _latestSnapshot is null ||
-            !SharedScaleBookSelection.IsEligible(_bybitState, _latestSnapshot,
-                _latestSnapshotAt, DateTimeOffset.UtcNow, _freshness))
+        if (_latestSnapshot is null || scale is null)
         {
             Asks.Clear();
             Bids.Clear();
             return;
         }
-
-        Replace(
-            Asks,
-            ToViewModels(
-                _latestSnapshot.Asks,
-                scale.Asks.Reverse(),
-                LiquiditySide.Ask,
-                _latestLiquidity,
-                rowHeight,
-                textSize));
-        Replace(
-            Bids,
-            ToViewModels(
-                _latestSnapshot.Bids,
-                scale.Bids,
-                LiquiditySide.Bid,
-                _latestLiquidity,
-                rowHeight,
-                textSize));
+        RebuildVenueBook(_latestSnapshot, scale, BybitBookSettings,
+            _latestLiquidity, Asks, Bids);
     }
 
-    private void RebuildGate(
-        SharedPriceScale scale,
-        double rowHeight,
-        double textSize)
+    private void RebuildGate(SharedPriceScale? scale)
     {
-        if (SelectedProduct != MarketProduct.Perpetual ||
-            _latestGateSnapshot is null ||
-            !SharedScaleBookSelection.IsEligible(_gateState, _latestGateSnapshot,
-                _latestGateSnapshotAt, DateTimeOffset.UtcNow, _freshness))
+        if (_latestGateSnapshot is null || scale is null)
         {
             GateAsks.Clear();
             GateBids.Clear();
             return;
         }
-
-        Replace(
-            GateAsks,
-            ToViewModels(
-                _latestGateSnapshot.Asks,
-                scale.Asks.Reverse(),
-                LiquiditySide.Ask,
-                _latestGateLiquidity,
-                rowHeight,
-                textSize));
-        Replace(
-            GateBids,
-            ToViewModels(
-                _latestGateSnapshot.Bids,
-                scale.Bids,
-                LiquiditySide.Bid,
-                _latestGateLiquidity,
-                rowHeight,
-                textSize));
+        RebuildVenueBook(_latestGateSnapshot, scale, GateBookSettings,
+            _latestGateLiquidity, GateAsks, GateBids);
     }
 
-    private void RebuildMexc(SharedPriceScale scale, double rowHeight, double textSize)
+    private void RebuildMexc(SharedPriceScale? scale)
     {
-        if (SelectedProduct != MarketProduct.Spot ||
-            _latestMexcSnapshot is null ||
-            !SharedScaleBookSelection.IsEligible(_mexcState, _latestMexcSnapshot,
-                _latestMexcSnapshotAt, DateTimeOffset.UtcNow, _freshness))
+        if (_latestMexcSnapshot is null || scale is null)
         {
             MexcAsks.Clear();
             MexcBids.Clear();
             return;
         }
-        Replace(MexcAsks, ToViewModels(_latestMexcSnapshot.Asks, scale.Asks.Reverse(),
-            LiquiditySide.Ask, _latestMexcLiquidity, rowHeight, textSize));
-        Replace(MexcBids, ToViewModels(_latestMexcSnapshot.Bids, scale.Bids,
-            LiquiditySide.Bid, _latestMexcLiquidity, rowHeight, textSize));
+        RebuildVenueBook(_latestMexcSnapshot, scale, MexcBookSettings,
+            _latestMexcLiquidity, MexcAsks, MexcBids);
+    }
+
+    private static void RebuildVenueBook(
+        OrderBookSnapshot snapshot,
+        SharedPriceScale scale,
+        VenueBookSettingsViewModel settings,
+        IReadOnlyDictionary<(LiquiditySide Side, decimal Price), LiquidityLevelState> liquidity,
+        ObservableCollection<BookLevelViewModel> asks,
+        ObservableCollection<BookLevelViewModel> bids)
+    {
+        var layout = settings.Layout;
+        var askPrices = scale.Asks.Reverse().ToArray();
+        var bidPrices = scale.Bids.ToArray();
+        var askPriceSet = askPrices.ToHashSet();
+        var bidPriceSet = bidPrices.ToHashSet();
+        var volumeScale = VisibleBookVolumeScale.ResolveSides(
+            snapshot.Asks.Where(level => askPriceSet.Contains(level.Price))
+                .Select(level => level.Quantity),
+            snapshot.Bids.Where(level => bidPriceSet.Contains(level.Price))
+                .Select(level => level.Quantity),
+            settings.AutomaticVolumeScale,
+            settings.ManualVolumeReference);
+        var textSize = Math.Clamp(layout.RowHeight * 0.62, 9, 16);
+        Replace(asks, ToViewModels(snapshot.Asks, askPrices, LiquiditySide.Ask,
+            liquidity, layout, textSize, volumeScale.AskLargest,
+            volumeScale.AskReference, settings.Palette));
+        Replace(bids, ToViewModels(snapshot.Bids, bidPrices, LiquiditySide.Bid,
+            liquidity, layout, textSize, volumeScale.BidLargest,
+            volumeScale.BidReference, settings.Palette));
     }
 
     private void OnGateSnapshotReceived(OrderBookSnapshot snapshot, long expectedGeneration)
@@ -880,6 +866,7 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
             if (!_generation.IsCurrent(expectedGeneration)) return;
             RebuildBook();
             UpdateCrossVenueComparison();
+            GateEmptyState = string.Empty;
             GateLastPrice =
                 snapshot.BestBid is { } bid ? FormatPrice(bid) : "—";
             GateSpread =
@@ -897,9 +884,10 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
         {
             if (!_generation.IsCurrent(expectedGeneration)) return;
             RebuildBook();
+            MexcEmptyState = string.Empty;
             MexcLastPrice = snapshot.BestBid is { } bid ? FormatPrice(bid) : "—";
             MexcSpread = snapshot.Spread is { } spread ? FormatPrice(spread) : "—";
-            UpdateConsensus(DepthOptions[_densityIndex]);
+            UpdateConsensus(VisibleConsensusDepth());
             UpdateCrossVenueComparison();
         });
     }
@@ -921,6 +909,7 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
         {
             if (!_generation.IsCurrent(expectedGeneration)) return;
             MexcConnectionStatus = FormatConnectionState(state, _latestMexcSnapshotAt);
+            if (_latestMexcSnapshot is null) MexcEmptyState = MarketDataEmptyState(state);
             RebuildBook();
             UpdateCrossVenueComparison();
         });
@@ -950,6 +939,7 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
         {
             if (!_generation.IsCurrent(expectedGeneration)) return;
             GateConnectionStatus = FormatConnectionState(state);
+            if (_latestGateSnapshot is null) GateEmptyState = MarketDataEmptyState(state);
             RebuildBook();
             UpdateCrossVenueComparison();
         });
@@ -979,6 +969,7 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
         {
             if (!_generation.IsCurrent(expectedGeneration)) return;
             ConnectionStatus = FormatConnectionState(state);
+            if (_latestSnapshot is null) BybitEmptyState = MarketDataEmptyState(state);
             RebuildBook();
             UpdateCrossVenueComparison();
         });
@@ -989,12 +980,21 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
         DateTimeOffset? lastSnapshotAt = null) =>
         VenueCardStatus.Resolve(state, lastSnapshotAt, DateTimeOffset.UtcNow, _freshness);
 
+    private static string MarketDataEmptyState(MarketDataConnectionState state) => state switch
+    {
+        MarketDataConnectionState.Connecting => "ПОДКЛЮЧЕНИЕ К ПУБЛИЧНОМУ СТАКАНУ…",
+        MarketDataConnectionState.WaitingForSnapshot => "ОЖИДАНИЕ ПЕРВОГО СНИМКА…",
+        MarketDataConnectionState.Reconnecting => "ПЕРЕПОДКЛЮЧЕНИЕ И НОВЫЙ СНИМОК…",
+        MarketDataConnectionState.Live => "ОЖИДАНИЕ УРОВНЕЙ…",
+        _ => "ПУБЛИЧНЫЙ СТАКАН НЕДОСТУПЕН"
+    };
+
     private void UpdateConsensus(int depth)
     {
         var eligible = ConsensusBookSelection.Select(
             SelectedProduct,
             [
-                new("MEXC", MarketProduct.Spot, _mexcState,
+                new("MEXC", SelectedProduct, _mexcState,
                     _latestMexcSnapshot, _latestMexcSnapshotAt),
                 new("GATE", MarketProduct.Perpetual, _gateState,
                     _latestGateSnapshot, _latestGateSnapshotAt),
@@ -1032,9 +1032,8 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
         GateConnectionStatus = SelectedProduct == MarketProduct.Spot
             ? "UNAVAILABLE"
             : FormatConnectionState(_gateState, _latestGateSnapshotAt);
-        MexcConnectionStatus = SelectedProduct == MarketProduct.Spot
-            ? (_mexcClient is null ? "UNAVAILABLE" : FormatConnectionState(_mexcState, _latestMexcSnapshotAt))
-            : "UNAVAILABLE";
+        MexcConnectionStatus = _mexcClient is null
+            ? "UNAVAILABLE" : FormatConnectionState(_mexcState, _latestMexcSnapshotAt);
         if (_client is null) ConnectionStatus = "UNAVAILABLE";
         if (_gateClient is null) GateConnectionStatus = "UNAVAILABLE";
         CatalogState = CatalogPresentationPolicy.PreserveOrMarkStale(
@@ -1051,7 +1050,7 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
     private int GetScaleEligibilityMask(DateTimeOffset now)
     {
         var mask = 0;
-        if (SelectedProduct == MarketProduct.Spot && SharedScaleBookSelection.IsEligible(
+        if (SharedScaleBookSelection.IsEligible(
                 _mexcState, _latestMexcSnapshot, _latestMexcSnapshotAt, now, _freshness))
             mask |= 1;
         if (SelectedProduct == MarketProduct.Perpetual && SharedScaleBookSelection.IsEligible(
@@ -1071,11 +1070,11 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
     {
         token.ThrowIfCancellationRequested();
         var instrument = new CanonicalInstrument(baseAsset, quoteAsset, product);
-        _bybitTickSize = product == MarketProduct.Spot
-            ? _publicCatalog.TickSize(instrument, TradingVenue.Mexc)
-            : _publicCatalog.TickSize(instrument, TradingVenue.Bybit);
+        _bybitTickSize = product == MarketProduct.Perpetual
+            ? _publicCatalog.TickSize(instrument, TradingVenue.Bybit) : null;
         _gateTickSize = product == MarketProduct.Perpetual
             ? _publicCatalog.TickSize(instrument, TradingVenue.Gate) : null;
+        _mexcTickSize = _publicCatalog.TickSize(instrument, TradingVenue.Mexc);
         Dispatcher.UIThread.Post(RebuildBook);
         return Task.CompletedTask;
     }
@@ -1106,15 +1105,24 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
         {
             PublicCatalogLoadIsolation.LoadBatchAsync(TradingVenue.Mexc, async () =>
             {
-                var result = await new MexcInstrumentMetadataClient(_metadataHttpClient)
+                var result = await new MexcInstrumentMetadataClient(_catalogHttpClient)
                     .GetSpotCatalogResultAsync().ConfigureAwait(false);
                 return new PublicCatalogBatch(result.Entries, result.InvalidEligibleCount);
             }),
-            PublicCatalogLoadIsolation.LoadAsync(TradingVenue.Gate, () =>
-                new GateInstrumentMetadataClient(_metadataHttpClient)
-                .GetUsdtPerpetualCatalogAsync()),
+            PublicCatalogLoadIsolation.LoadBatchAsync(TradingVenue.Mexc, async () =>
+            {
+                var result = await new MexcContractInstrumentMetadataClient(_catalogHttpClient)
+                    .GetUsdtPerpetualCatalogResultAsync().ConfigureAwait(false);
+                return new PublicCatalogBatch(result.Entries, result.InvalidEligibleCount);
+            }),
+            PublicCatalogLoadIsolation.LoadBatchAsync(TradingVenue.Gate, async () =>
+            {
+                var result = await new GateInstrumentMetadataClient(_catalogHttpClient)
+                    .GetUsdtPerpetualCatalogResultAsync().ConfigureAwait(false);
+                return new PublicCatalogBatch(result.Entries, result.RejectedCount);
+            }),
             PublicCatalogLoadIsolation.LoadAsync(TradingVenue.Bybit, () =>
-                new BybitInstrumentMetadataClient(_metadataHttpClient)
+                new BybitInstrumentMetadataClient(_catalogHttpClient)
                 .GetLinearPerpetualCatalogAsync())
         };
         var catalogs = await Task.WhenAll(tasks).ConfigureAwait(false);
@@ -1299,7 +1307,7 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
         {
             ConnectionStatus = bybit.MarketDataAvailable ? "CONNECTING" : "UNAVAILABLE";
             GateConnectionStatus = gate.MarketDataAvailable ? "CONNECTING" : "UNAVAILABLE";
-            MexcConnectionStatus = "UNAVAILABLE";
+            MexcConnectionStatus = mexc.MarketDataAvailable ? "CONNECTING" : "UNAVAILABLE";
         }
         else
         {
@@ -1332,8 +1340,14 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
                     throw new InvalidOperationException("Official Gate tick is missing.")),
             TradingVenue.Mexc when capability.Instrument.Product == MarketProduct.Spot =>
                 new MexcPublicOrderBookClient(
-                    _metadataHttpClient,
+                    _publicMarketDataHttpClient,
                     capability.VenueSymbol),
+            TradingVenue.Mexc when capability.Instrument.Product == MarketProduct.Perpetual =>
+                new MexcContractPublicOrderBookClient(
+                    _publicMarketDataHttpClient,
+                    capability.VenueSymbol,
+                    metadata.QuantityMultiplier ??
+                        throw new InvalidOperationException("Official MEXC contract multiplier is missing.")),
             _ => throw new InvalidOperationException(
                 $"{capability.Venue} is not supported on the Perpetual screen.")
         };
@@ -1425,6 +1439,7 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
         _latestMexcLiquidity = new Dictionary<(LiquiditySide, decimal), LiquidityLevelState>();
         _bybitTickSize = null;
         _gateTickSize = null;
+        _mexcTickSize = null;
         _bybitState = MarketDataConnectionState.Connecting;
         _gateState = MarketDataConnectionState.Connecting;
         _mexcState = MarketDataConnectionState.Disconnected;
@@ -1442,7 +1457,7 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
             ClusterLevels.Clear();
             LastPrice = GateLastPrice = MexcLastPrice = Spread = GateSpread = MexcSpread = "—";
             ConnectionStatus = GateConnectionStatus = "CONNECTING";
-            SharedScaleLabel = "ОБЩАЯ ШКАЛА: —";
+            SharedScaleLabel = "НЕЗАВИСИМЫЕ ШКАЛЫ: —";
             ConsensusVerdict = "ЭВРИСТИКА: НЕТ ДАННЫХ";
             ConsensusColor = "#8B93A1";
             UpdateCrossVenueComparison();
@@ -1509,8 +1524,11 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
         IEnumerable<decimal> priceScale,
         LiquiditySide side,
         IReadOnlyDictionary<(LiquiditySide Side, decimal Price), LiquidityLevelState> liquidity,
-        double rowHeight,
-        double textSize)
+        BookDisplayLayout layout,
+        double textSize,
+        decimal visibleLargest,
+        decimal volumeReference,
+        BookBarPalette palette)
     {
         var levelsByPrice = source.ToDictionary(
             static level => level.Price,
@@ -1543,22 +1561,24 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
                     FormatPrice(price),
                     string.Empty,
                     0,
+                    "#00000000",
                     "#5E6570",
                     string.Empty,
                     string.Empty,
                     "#8B93A1",
                     "#00000000",
-                    rowHeight,
+                    layout.RowHeight,
                     textSize,
                     Math.Max(10, textSize - 2),
                     0.28);
             }
 
-            // Square-root scaling preserves the hierarchy without allowing one
-            // unusually large wall to flatten every smaller visible level.
-            var normalized = maximum == 0
-                ? 0
-                : Math.Sqrt((double)(level.Quantity / maximum));
+            var normalized = VisibleBookVolumeScale.Ratio(
+                level.Quantity, volumeReference);
+            var isLargest = visibleLargest > 0 && level.Quantity == visibleLargest;
+            var barColor = side == LiquiditySide.Ask
+                ? isLargest ? palette.LargestAsk : palette.Ask
+                : isLargest ? palette.LargestBid : palette.Bid;
             var isSignificant =
                 level.Quantity >= significanceThreshold &&
                 level.Quantity > median;
@@ -1581,13 +1601,14 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
             return new BookLevelViewModel(
                 FormatPrice(level.Price),
                 level.Quantity.ToString("0.####", CultureInfo.InvariantCulture),
-                28 + (normalized * 360),
-                isSignificant ? "#FFFFFF" : "#D7DBE2",
+                normalized * layout.BarWidth,
+                barColor,
+                "#F7FAFF",
                 isSignificant ? "◆" : string.Empty,
                 isSignificant ? behaviorText : string.Empty,
                 behaviorColor,
                 isSignificant ? behaviorBackground : "#00000000",
-                rowHeight,
+                layout.RowHeight,
                 textSize,
                 Math.Max(10, textSize - 2),
                 1);

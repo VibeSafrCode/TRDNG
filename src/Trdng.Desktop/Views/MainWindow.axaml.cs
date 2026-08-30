@@ -8,22 +8,12 @@ namespace Trdng.Desktop.Views;
 
 public partial class MainWindow : Window
 {
-    private bool _pinchAdjusted;
-
     public MainWindow()
     {
         InitializeComponent();
-        OrderBookSurface.AddHandler(InputElement.PinchEvent, OnPinch);
-        OrderBookSurface.AddHandler(InputElement.PinchEndedEvent, OnPinchEnded);
     }
 
     private MainViewModel? ViewModel => DataContext as MainViewModel;
-
-    private void MoreDepth_Click(object? sender, Avalonia.Interactivity.RoutedEventArgs e) =>
-        ViewModel?.ShowMoreDepth();
-
-    private void LessDepth_Click(object? sender, Avalonia.Interactivity.RoutedEventArgs e) =>
-        ViewModel?.ShowLessDepth();
 
     private async void SelectApt_Click(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
@@ -95,27 +85,35 @@ public partial class MainWindow : Window
     private async void ConfirmOrderTestCredentialRevoke_Click(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     { if (ViewModel is { } vm) await vm.ConfirmCredentialRevokeAsync(false); }
 
-    private void OnPinch(object? sender, PinchEventArgs e)
+    private void BookViewport_SizeChanged(object? sender, SizeChangedEventArgs e)
     {
-        if (_pinchAdjusted)
-        {
-            return;
-        }
-
-        if (e.Scale >= 1.08)
-        {
-            ViewModel?.ShowLessDepth();
-            _pinchAdjusted = true;
-            e.Handled = true;
-        }
-        else if (e.Scale <= 0.92)
-        {
-            ViewModel?.ShowMoreDepth();
-            _pinchAdjusted = true;
-            e.Handled = true;
-        }
+        if (sender is Control { Tag: string venueName } &&
+            Enum.TryParse<TradingVenue>(venueName, true, out var venue))
+            ViewModel?.UpdateBookViewport(venue, e.NewSize.Width, e.NewSize.Height);
     }
 
-    private void OnPinchEnded(object? sender, PinchEndedEventArgs e) =>
-        _pinchAdjusted = false;
+    private void BookViewport_PointerWheelChanged(object? sender, PointerWheelEventArgs e)
+    {
+        if (e.Delta.Y == 0 || sender is not Control { Tag: string venueName } ||
+            !Enum.TryParse<TradingVenue>(venueName, true, out var venue)) return;
+        ViewModel?.AdjustBookDepth(venue, e.Delta.Y > 0 ? -1 : 1);
+        e.Handled = true;
+    }
+
+    private void ResetBookPalette_Click(object? sender,
+        Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (sender is Control { Tag: TradingVenue venue })
+            ViewModel?.ResetBookPalette(venue);
+        else if (sender is Control { Tag: string venueName } &&
+                 Enum.TryParse<TradingVenue>(venueName, true, out venue))
+            ViewModel?.ResetBookPalette(venue);
+    }
+
+    private void OpenBookSettings_Click(object? sender,
+        Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (sender is Button { Flyout: { } flyout } button)
+            flyout.ShowAt(button);
+    }
 }

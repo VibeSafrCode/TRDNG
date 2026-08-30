@@ -24,7 +24,10 @@ public sealed class PublicInstrumentCatalog
                 entry.VenueSymbol.Any(char.IsWhiteSpace) ||
                 (entry.TickSize is not null && entry.TickSize <= 0) ||
                 (entry.QuantityMultiplier is not null && entry.QuantityMultiplier <= 0) ||
-                (entry.Venue is TradingVenue.Bybit or TradingVenue.Gate && entry.TickSize is null))
+                ((entry.Venue is TradingVenue.Bybit or TradingVenue.Gate ||
+                  entry.Venue == TradingVenue.Mexc &&
+                  entry.Instrument.Product == MarketProduct.Perpetual) &&
+                 entry.TickSize is null))
                 throw new InvalidDataException("Public catalog entry is invalid.");
             var key = (entry.Instrument, entry.Venue);
             if (!next.TryAdd(key, entry) && next[key] != entry)
@@ -148,9 +151,9 @@ public static class CatalogSelectionPolicy
 {
     public static CanonicalInstrument? ChooseInitial(PublicInstrumentCatalog catalog)
     {
-        var apt = new CanonicalInstrument("APT", "USDT", MarketProduct.Perpetual);
-        if (catalog.Find(apt, TradingVenue.Bybit) is not null ||
-            catalog.Find(apt, TradingVenue.Gate) is not null) return apt;
+        var bitcoin = new CanonicalInstrument("BTC", "USDT", MarketProduct.Perpetual);
+        if (catalog.Find(bitcoin, TradingVenue.Bybit) is not null ||
+            catalog.Find(bitcoin, TradingVenue.Gate) is not null) return bitcoin;
         return catalog.Search(MarketProduct.Perpetual, string.Empty, 1).FirstOrDefaultNullable()
             ?? catalog.Search(MarketProduct.Spot, string.Empty, 1).FirstOrDefaultNullable();
     }
@@ -160,8 +163,8 @@ public static class CatalogSelectionPolicy
     {
         var same = new CanonicalInstrument(current.BaseAsset, current.QuoteAsset, target);
         if (HasMarket(catalog, same)) return same;
-        var apt = new CanonicalInstrument("APT", "USDT", target);
-        if (HasMarket(catalog, apt)) return apt;
+        var bitcoin = new CanonicalInstrument("BTC", "USDT", target);
+        if (HasMarket(catalog, bitcoin)) return bitcoin;
         return catalog.Search(target, string.Empty, 1).FirstOrDefaultNullable();
     }
 

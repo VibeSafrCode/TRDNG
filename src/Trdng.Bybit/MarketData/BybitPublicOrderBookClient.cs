@@ -21,7 +21,7 @@ public sealed class BybitPublicOrderBookClient : IPublicMarketDataClient
 
     public BybitPublicOrderBookClient(
         string symbol = "BTCUSDT",
-        int depth = 50,
+        int depth = 200,
         decimal clusterPriceStep = 0.5m)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(symbol);
@@ -231,7 +231,7 @@ public sealed class BybitPublicOrderBookClient : IPublicMarketDataClient
             return;
         }
 
-        SnapshotReceived?.Invoke(_session.Engine.Capture(Math.Min(30, _depth)));
+        SnapshotReceived?.Invoke(_session.Engine.Capture(Math.Min(200, _depth)));
         lastPublishedAt = now;
     }
 

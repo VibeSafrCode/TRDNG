@@ -4,6 +4,7 @@ public sealed record BookLevelViewModel(
     string Price,
     string Quantity,
     double VisualWidth,
+    string BarColor,
     string QuantityColor,
     string SignificanceMarker,
     string Behavior,

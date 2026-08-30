@@ -177,7 +177,7 @@ public sealed class GatePublicMarketDataClient : IPublicMarketDataClient
             }
             if (now - lastBook >= TimeSpan.FromMilliseconds(75))
             {
-                SnapshotReceived?.Invoke(_session.Engine.Capture(30));
+                SnapshotReceived?.Invoke(_session.Engine.Capture(50));
                 lastBook = now;
             }
             return;

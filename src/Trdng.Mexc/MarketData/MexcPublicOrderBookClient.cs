@@ -139,7 +139,7 @@ public sealed class MexcPublicOrderBookClient : IPublicMarketDataClient
                 if (_session.State == MexcOrderBookSessionState.Live)
                 {
                     ChangeState(MarketDataConnectionState.Live);
-                    SnapshotReceived?.Invoke(_session.Engine.Capture(Math.Min(30, _depth)));
+                    SnapshotReceived?.Invoke(_session.Engine.Capture(Math.Min(200, _depth)));
                 }
             }
         }

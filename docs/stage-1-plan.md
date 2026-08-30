@@ -17,6 +17,7 @@ S0.3 заблокирован опасным physical-footprint/swap росто�
 | S1.3 Asset selector | Пользователь выбирает актив один раз | Один быстрый selector, хорошие defaults, три независимых venue cards | Watchlists, десятки фильтров | Короткий стартовый каталог | UX screenshot; выбор атомарно переключает все поддерживаемые стаканы | STANDARD | Да |
 | S1.4 SPOT / FUTURES | Нельзя перепутать продукт | Явный toggle, отдельные capabilities/symbols/subscriptions; unavailable state | Автоподмена рынка | Какие пары входят в MVP | Tests: spot/perp isolation; UI всегда показывает product | STANDARD | Да |
 | S1.5 Three-book acceptance | Один экран показывает MEXC/Gate/Bybit | Общая шкала, три раздельных стакана, unsupported/unavailable, MacBook layout | Слияние ликвидности, smart routing | Приоритет ширины/плотности | Live soak; stale/disconnect; resize/trackpad visual QA | STANDARD | Да |
+| S1.7 Adaptive order books | Стаканы используют всю высоту и настраиваются отдельно | BTC default; MEXC/Gate/Bybit public perpetual books; auto/manual depth; trackpad; per-side visible-volume bars; per-book colors | Private API, orders, shared liquidity, persistent presets | Owner palette and independent controls | Deterministic tests; public BTC smoke; build/package; large-window visual QA | STANDARD | Да |
 
 | S2.1 Dry-run order model | Команда всегда адресована одной видимой бирже | Active venue, BUY/SELL MARKET intent, qty/notional semantics, filters, client order ID | Сеть/private keys | Default qty mode и confirmation UX | Deterministic unit/property tests; no transport dependency | STANDARD | Да |
 | S2.2 Risk gates | Ошибка ввода не становится сделкой | Hard notional/qty limits, active venue/product banner, confirmation, kill switch | Реальные ордера | Founder утверждает лимиты | Negative tests; kill switch blocks every path; audit event | STANDARD | Да |
@@ -101,6 +102,18 @@ Official credential-free catalogs now provide a bounded search beyond the two
 starter shortcuts. MEXC Spot and Gate/Bybit USDT Perpetual remain product-
 isolated; only exact catalog-proven venue symbols create public clients. No
 private or trading scope changed. Evidence: [`s1.6-evidence.md`](s1.6-evidence.md).
+
+## S1.7 — adaptive independent order books / local implementation complete
+
+BTC/USDT is the startup/test selection. MEXC, Gate and Bybit perpetual books are
+public and independent; MEXC uses bounded REST polling. Each venue owns its
+depth, trackpad step, automatic/manual volume reference and four bar colors.
+Automatic bars normalize the visible ask and bid sides independently. The
+Founder-reported spread-row clipping has a dedicated safety gap. Release build,
+package and exact startup pass; the final post-data screenshot remains `OPEN`
+because Computer Use timed out after the books populated. Git publication and
+CI are separate pending gates. Evidence:
+[`s1.7-adaptive-orderbooks-evidence.md`](s1.7-adaptive-orderbooks-evidence.md).
 
 MEXC Futures public books допустимы. Private futures trading остаётся
 `BLOCKED/UNAVAILABLE`: официальная Contract API помечает place/cancel как under

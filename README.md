@@ -4,8 +4,13 @@ MacMakeMoney_618 (`MMM_618`) is an independent macOS terminal under active Stage
 
 ## Current Stage 1 capabilities
 
-- Public books: Bybit and Gate perpetuals; MEXC Spot.
-- Canonical APT/USDT and BTC/USDT selection with strict Spot/Perpetual isolation.
+- Public books: MEXC Spot plus MEXC, Gate and Bybit USDT perpetuals. MEXC
+  perpetual data currently uses bounded public REST polling; private futures
+  trading remains blocked.
+- Dynamic exact public catalogs with bounded search, BTC/USDT as the startup
+  selection, APT/USDT as a shortcut, and strict Spot/Perpetual isolation.
+- Independent full-height venue books with per-book auto/manual depth, trackpad
+  adjustment, visible-side volume scaling and customizable bar colors.
 - Snapshot/delta continuity, reconnect/resnapshot, stale handling and separate venue liquidity indicators.
 - Shared comparison only for fresh comparable books—never merged liquidity or smart routing.
 - Dry-run market intents, official-filter validation, simulation-only risk limits, STOP, two-step confirmation, journaled simulation and restart reconciliation.
