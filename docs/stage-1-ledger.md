@@ -447,6 +447,9 @@ Baseline зафиксирован: 2026-08-02 11:31 +05:00.
   sandbox IPC-blocked and a temporary runner stalled before execution.
 - One local app package and strict codesign: PASS. Evidence:
   [`pr02-bounded-memory-evidence.md`](pr02-bounded-memory-evidence.md).
-- PR-02 implementation/evidence commit: `c7f3ce0`. Independent audit, push,
-  pull request, GitHub CI and merge remain separate pending gates. No GUI/live/
-  private/authenticated/order/money action.
+- PR-02 implementation/evidence commit: `c7f3ce0`; pre-publication docs:
+  `28e38b1`. Final audit found no P0/P1 blocker. Pull request `#7` passed GitHub
+  CI `33298030728` (Release build PASS; 309/309 official tests) and merged to
+  `main` as `c8e2362cb2b9c06cfaf4c914225ca7f5ceb9c757`.
+- GUI/live/private/authenticated/order/money action: NOT RUN. PR-03 and PR-04
+  remain separate future scopes.

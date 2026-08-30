@@ -12,10 +12,10 @@
 | Pre-separation Git bundle | VERIFIED COMPLETE | Full bundle verified before clean recreation |
 | Restore verification | NOT RUN | Recovery artifacts exist; restore procedure not executed |
 | Repository root | VERIFIED | `5780ef66b20143e918e1d88399bfe985b0c1287e` |
-| Current main / origin | VERIFIED | PR-01 merged as `f69d1a1f59c18546d8e5cdaa2683f64caf78f691` |
-| Current working branch | LOCAL / AUDIT OPEN | `codex/bounded-orderbook-memory`; PR-02 commit `c7f3ce0` |
+| Current main / origin | VERIFIED | PR-02 merged as `c8e2362cb2b9c06cfaf4c914225ca7f5ceb9c757` |
+| Current working branch | VERIFIED | local `main` equals `origin/main` before this factual docs-only update |
 | GitHub publication | VERIFIED PUBLIC | Read-only check 2026-08-30: `PUBLIC`, default branch `main`; no visibility change performed in PR-02 |
-| CI acceptance | VERIFIED BASELINE | PR-01 run `33296738736`: Release build PASS; official tests 295/295 PASS; current PR-02 diff has no CI evidence |
+| CI acceptance | VERIFIED | PR-02 run `33298030728`: Release build PASS; official tests 309/309 PASS |
 | Older sprint commit IDs | PRE-SEPARATION LOCAL HISTORY | IDs in older evidence documents are preserved by the verified bundle and are not ancestors of the recreated root |
 | Tag / release | NOT RUN | Не разрешены; проверяемых идентификаторов нет |
 
@@ -59,8 +59,8 @@
   `91c10efed8dfd9cbcb7cfaa36cea62fc42f36abae518aa30f3896af8b39893c8`.
 - Signed executable SHA-256:
   `75da43b19cae768db5ff51336f009d240c762734931b1631224dba45672e9450`.
-- Backup, GUI, notarization, tag and release: NOT RUN. PR-02 source/evidence is
-  isolated in local commit `c7f3ce0` pending publication and CI.
+- Backup, GUI, notarization, tag and release: NOT RUN. PR-02 source/evidence
+  commit `c7f3ce0` passed PR `#7` CI and merged in `c8e2362`.
 
 ## Формат backup-записи
 

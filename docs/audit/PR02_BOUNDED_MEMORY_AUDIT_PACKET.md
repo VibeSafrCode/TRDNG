@@ -55,3 +55,13 @@ Classify findings P0/P1/P2 and explicitly check:
 Explicit exclusions: public HTTP bounds, memory soak thresholds, MainViewModel
 backpressure/refactor, secret-input changes, authenticated endpoints and any
 production order path.
+
+## Superseding acceptance
+
+- Final exact-diff audit found no P0/P1 blocker.
+- GitHub CI `33298030728`: Release build PASS; official deterministic suite
+  309/309 PASS, 0 failed, 0 skipped.
+- Pull request `#7` merged to `main` as
+  `c8e2362cb2b9c06cfaf4c914225ca7f5ceb9c757`.
+- This packet remains the historical accepted PR-02 review scope. PR-03 has not
+  started.

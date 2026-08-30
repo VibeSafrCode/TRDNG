@@ -53,9 +53,10 @@ Date: 2026-08-30 (+05:00).
 
 ## Debt and next gate
 
-- `OPEN`: independent review of exact PR-02 implementation commit `c7f3ce0`.
-- `OPEN`: official deterministic runtime suite must pass once in GitHub CI after
-  accepted commit/pull request.
+- `ACCEPTED`: exact implementation commit `c7f3ce0` passed final diff review
+  without P0/P1 findings.
+- `PASS`: pull-request GitHub CI `33298030728` completed Release build and the
+  official deterministic suite: 309/309 passed, 0 failed, 0 skipped.
 - `OPEN`: PR-04 still owns the real Mac memory soak and agreed footprint limits;
   bounded collections reduce the attack surface but do not prove stable RSS.
 - `OPEN`: cluster overflow metrics are core-only and not yet surfaced in UI or
@@ -64,6 +65,7 @@ Date: 2026-08-30 (+05:00).
 - Rollback: revert only the PR-02 implementation/evidence changes. PR-01 merge
   `f69d1a1` remains the baseline.
 
-Implementation and closure evidence are isolated in local commit `c7f3ce0`
-(`fix: bound order book and cluster memory`). Push, pull request, merge, tag,
-notarization and release have not been performed at the time of this update.
+Implementation is isolated in commit `c7f3ce0`; factual pre-publication docs are
+in `28e38b1`. Pull request `#7` merged them to public `main` as
+`c8e2362cb2b9c06cfaf4c914225ca7f5ceb9c757`. Tag, notarization and production
+release remain NOT RUN.

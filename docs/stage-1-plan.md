@@ -147,9 +147,11 @@ maintenance/closed. Поддержку нельзя включать, пока �
 
 Рабочий checklist: [`audit/SPRINT_CLOSURE_CHECKLIST.md`](audit/SPRINT_CLOSURE_CHECKLIST.md).
 
-## Audit PR-02 status — implementation complete / independent audit open
+## Audit PR-02 status — accepted / merged
 
 Order-book state, MEXC pre-snapshot buffering and current cluster intervals now
 have explicit fail-closed capacity boundaries. Venue sessions require resync
 instead of silently truncating data. Visual and trading behavior were not
 expanded. Evidence: [`pr02-bounded-memory-evidence.md`](pr02-bounded-memory-evidence.md).
+GitHub CI `33298030728` passed the Release build and 309/309 tests; pull request
+`#7` merged as `c8e2362cb2b9c06cfaf4c914225ca7f5ceb9c757`.
