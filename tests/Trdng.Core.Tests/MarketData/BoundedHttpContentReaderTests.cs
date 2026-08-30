@@ -200,33 +200,54 @@ public sealed class BoundedHttpContentReaderTests
     }
 
     private sealed class CountingReadStream(byte[] bytes, int maximumChunkBytes = int.MaxValue)
-        : MemoryStream(bytes)
+        : Stream
     {
+        private int _position;
+
         public int BytesRead { get; private set; }
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => bytes.Length;
+        public override long Position
+        {
+            get => _position;
+            set => throw new NotSupportedException();
+        }
 
         public override int Read(byte[] buffer, int offset, int count)
         {
-            var read = base.Read(buffer, offset, Math.Min(count, maximumChunkBytes));
-            BytesRead += read;
-            return read;
+            ArgumentNullException.ThrowIfNull(buffer);
+            return ReadCore(buffer.AsSpan(offset, count));
         }
 
-        public override int Read(Span<byte> buffer)
-        {
-            var read = base.Read(buffer[..Math.Min(buffer.Length, maximumChunkBytes)]);
-            BytesRead += read;
-            return read;
-        }
+        public override int Read(Span<byte> buffer) => ReadCore(buffer);
 
-        public override async ValueTask<int> ReadAsync(
+        public override ValueTask<int> ReadAsync(
             Memory<byte> buffer,
             CancellationToken cancellationToken = default)
         {
-            var read = await base.ReadAsync(
-                buffer[..Math.Min(buffer.Length, maximumChunkBytes)],
-                cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            return ValueTask.FromResult(ReadCore(buffer.Span));
+        }
+
+        private int ReadCore(Span<byte> destination)
+        {
+            var read = Math.Min(
+                Math.Min(destination.Length, maximumChunkBytes),
+                bytes.Length - _position);
+            if (read == 0) return 0;
+            bytes.AsSpan(_position, read).CopyTo(destination);
+            _position += read;
             BytesRead += read;
             return read;
         }
+
+        public override void Flush() { }
+        public override long Seek(long offset, SeekOrigin origin) =>
+            throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) =>
+            throw new NotSupportedException();
     }
 }
