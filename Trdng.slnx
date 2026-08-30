@@ -9,4 +9,7 @@
   <Folder Name="/tests/">
     <Project Path="tests/Trdng.Core.Tests/Trdng.Core.Tests.csproj" />
   </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/Trdng.MemorySoak/Trdng.MemorySoak.csproj" />
+  </Folder>
 </Solution>

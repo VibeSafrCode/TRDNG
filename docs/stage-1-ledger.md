@@ -477,3 +477,29 @@ Baseline зафиксирован: 2026-08-02 11:31 +05:00.
   `8ba6fbfb2a15ee2a8f9fb2a6d4fbdf4f2991fdf7`.
 - GUI/live/private/authenticated/order/money: NOT RUN. PR-04 soak remains
   separate HIGH scope.
+
+## Audit PR-04 memory observability — ACTIVE / LOCAL VERIFICATION
+
+- Branch `codex/memory-observability-soak`; baseline accepted `main` at
+  `8e9c1b9`.
+- Added bounded local runtime samples, allowlisted allocation budgets and a
+  credential-free deterministic replay of three books, clusters and market
+  switches. There is no remote telemetry.
+- One-million-cycle replay PASS: 3,003,000 applied updates, 1,000 switches,
+  1,500/1,500 fake clients created/disposed, maximum active 2, peak managed
+  6,775,480 bytes, peak working set 59,441,152 bytes, retained managed growth
+  478,736 bytes and 2,391 allocated bytes per applied update.
+- Targeted assembly compile and full Release solution build PASS, 0 warnings/
+  errors. One official local VSTest attempt remained IPC-blocked before runtime
+  and was not retried.
+- One exact osx-arm64 package and strict codesign PASS. The app completed 15m40s
+  with one process: final RSS 74,224 KiB, final/peak physical footprint
+  204,065,920 / 220,843,136 bytes, about 34.3 MiB swapped growth and no emergency
+  threshold. Exact PID was terminated and absence verified. Classification:
+  `PASS_15_MIN`; two-hour release soak, PR CI, merge, tag, notarization and
+  release remain `NOT RUN`.
+- Owner product observations are deferred intact to the next visual/public-data
+  sprint: independent per-book adaptive depth and manual gear controls,
+  visible-volume bar scaling with owner-default/customizable colors, BTC default
+  and investigation of empty Gate/MEXC books. Current exact soak package is
+  unchanged.

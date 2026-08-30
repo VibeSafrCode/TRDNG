@@ -13,7 +13,7 @@
 | Restore verification | NOT RUN | Recovery artifacts exist; restore procedure not executed |
 | Repository root | VERIFIED | `5780ef66b20143e918e1d88399bfe985b0c1287e` |
 | Current main / origin | VERIFIED | PR-03 merged as `8ba6fbfb2a15ee2a8f9fb2a6d4fbdf4f2991fdf7` |
-| Current working branch | VERIFIED | local `main` fast-forwarded to `origin/main` before this factual docs-only update |
+| Current working branch | ACTIVE | `codex/memory-observability-soak`; PR-04 remains uncommitted during local verification |
 | GitHub publication | VERIFIED PUBLIC | Read-only check 2026-08-30: `PUBLIC`, default branch `main`; no visibility change performed in PR-02 |
 | CI acceptance | VERIFIED | PR-03 final run `33299985960`: Release build PASS; official tests 323/323 PASS |
 | Older sprint commit IDs | PRE-SEPARATION LOCAL HISTORY | IDs in older evidence documents are preserved by the verified bundle and are not ancestors of the recreated root |
@@ -76,6 +76,24 @@
 - Pull request `#8` final CI `33299985960`: Release build PASS, official tests
   323/323 PASS. Merged to `main` as
   `8ba6fbfb2a15ee2a8f9fb2a6d4fbdf4f2991fdf7`.
+
+## 2026-08-30 local PR-04 package and diagnostic
+
+- One self-contained `osx-arm64` publish replaced only the existing ignored
+  `artifacts/TRDNG.app`; this is not a release.
+- Strict deep ad-hoc codesign verification: PASS.
+- Packaged `Trdng.Core.dll` SHA-256:
+  `da061dd6039cd8cf2ad7764dd0a00684412cb5cc2e9d0836a6a32271572ce9ce`.
+- Signed packaged executable SHA-256:
+  `c5a369f42f87b6b485186c82854636b1c99932fcf45d06cae8cdad798aaf1f5e`.
+- One-million-cycle credential-free replay and Release build: PASS. The exact
+  package completed a 15m40s native diagnostic with one process. Final RSS:
+  74,224 KiB; final/peak physical footprint: 204,065,920 / 220,843,136 bytes;
+  final swapped memory: 159.2 MiB, about 34.3 MiB above the initial sample.
+  Classification: `PASS_15_MIN`, not a two-hour release pass. Exact PID `7946`
+  was terminated and absence verified.
+- Backup, notarization, tag, release, private/authenticated calls, orders and
+  money actions: NOT RUN.
 
 ## Формат backup-записи
 
