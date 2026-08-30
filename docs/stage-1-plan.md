@@ -156,12 +156,15 @@ expanded. Evidence: [`pr02-bounded-memory-evidence.md`](pr02-bounded-memory-evid
 GitHub CI `33298030728` passed the Release build and 309/309 tests; pull request
 `#7` merged as `c8e2362cb2b9c06cfaf4c914225ca7f5ceb9c757`.
 
-## Audit PR-03 status — implementation complete / CI pending
+## Audit PR-03 status — accepted / merged
 
 Public Bybit/Gate/MEXC metadata, catalogs and the MEXC REST depth snapshot now
 use one pooled bounded reader with endpoint-specific caps, JSON media-type gate,
 safe error codes, five-second production timeout and explicit no-redirect/no-
 cookie policy. Exact implementation commit: `89e645e`. Local Release build and
 package/codesign PASS; the one official local VSTest attempt remained sandbox
-IPC-blocked. Evidence: [`pr03-bounded-http-evidence.md`](pr03-bounded-http-evidence.md).
-PR-04 memory soak remains a separate HIGH sprint.
+IPC-blocked. A test-only counter correction then passed GitHub CI `33299985960`
+with 323/323 official tests. Pull request `#8` merged as
+`8ba6fbfb2a15ee2a8f9fb2a6d4fbdf4f2991fdf7`. Evidence:
+[`pr03-bounded-http-evidence.md`](pr03-bounded-http-evidence.md). PR-04 memory
+soak remains a separate HIGH sprint.

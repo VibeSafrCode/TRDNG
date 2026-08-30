@@ -57,7 +57,12 @@ Date: 2026-08-30 (+05:00).
 
 ## Debt and next gate
 
-- `OPEN`: official runtime assertions require one GitHub pull-request CI run.
+- `PASS`: first PR CI `33299901029` ran 323 tests and exposed two failures in
+  test instrumentation only: the fake `MemoryStream` counted each virtual read
+  twice. Production code was unchanged; test-only commit `2a0c938` replaced it
+  with a non-dispatching counted stream.
+- `PASS`: final PR CI `33299985960` completed the Release build and the official
+  deterministic suite: 323/323 passed, 0 failed, 0 skipped.
 - `OPEN`: PR-04 still owns the real-Mac RSS/footprint soak and stop thresholds.
 - `OPEN / P2`: JSON parsing uses the bounded .NET default maximum depth rather
   than one shared explicit project constant. This does not leave depth
@@ -67,5 +72,10 @@ Date: 2026-08-30 (+05:00).
 - Rollback: revert implementation commit `89e645e`; PR-01 and PR-02 remain the
   accepted baseline.
 
-The implementation is locally committed. Publication, pull request, CI and merge
-are separate gates and are not yet recorded as successful in this evidence.
+## Publication acceptance
+
+- Implementation commit: `89e645e`; test-only correction: `2a0c938`.
+- Pull request [#8](https://github.com/VibeSafrCode/TRDNG/pull/8) merged to
+  `main` as `8ba6fbfb2a15ee2a8f9fb2a6d4fbdf4f2991fdf7` after final CI PASS.
+- The working tree was clean after fast-forwarding local `main` to
+  `origin/main`. Tag, notarization and production release remain `NOT RUN`.

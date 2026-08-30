@@ -454,7 +454,7 @@ Baseline зафиксирован: 2026-08-02 11:31 +05:00.
 - GUI/live/private/authenticated/order/money action: NOT RUN. PR-03 and PR-04
   remain separate future scopes.
 
-## Audit PR-03 bounded public HTTP — IMPLEMENTED / CI PENDING
+## Audit PR-03 bounded public HTTP — ACCEPTED / MERGED
 
 - Branch `codex/bounded-public-http`, implementation commit `89e645e`.
 - Shared pooled reader performs `ResponseHeadersRead`, `Content-Length`
@@ -469,5 +469,11 @@ Baseline зафиксирован: 2026-08-02 11:31 +05:00.
 - Existing app package and strict codesign PASS. `Trdng.Core.dll` SHA-256:
   `4eaa90c921c539ea3ccae25853b1240fd784ddde61cbf0f42403b3f63fe369ac`;
   executable: `91026b011e7b55376dec773471be3a542d8ee8aa4685a9a6a90279c3d25e4a9c`.
-- GUI/live/private/authenticated/order/money: NOT RUN. GitHub CI/PR/merge:
-  PENDING. PR-04 soak remains separate HIGH scope.
+- First CI `33299901029`: build PASS; 321/323 tests passed, with two failures
+  caused by double-counting in the fake stream. Production code was unchanged;
+  test-only correction `2a0c938` fixed the instrument.
+- Final CI `33299985960`: Release build PASS; 323/323 official tests PASS.
+  Pull request `#8` merged as
+  `8ba6fbfb2a15ee2a8f9fb2a6d4fbdf4f2991fdf7`.
+- GUI/live/private/authenticated/order/money: NOT RUN. PR-04 soak remains
+  separate HIGH scope.

@@ -12,10 +12,10 @@
 | Pre-separation Git bundle | VERIFIED COMPLETE | Full bundle verified before clean recreation |
 | Restore verification | NOT RUN | Recovery artifacts exist; restore procedure not executed |
 | Repository root | VERIFIED | `5780ef66b20143e918e1d88399bfe985b0c1287e` |
-| Current main / origin | VERIFIED | PR-02 merged as `c8e2362cb2b9c06cfaf4c914225ca7f5ceb9c757` |
-| Current working branch | VERIFIED | `codex/bounded-public-http`; implementation `89e645e`, publication pending |
+| Current main / origin | VERIFIED | PR-03 merged as `8ba6fbfb2a15ee2a8f9fb2a6d4fbdf4f2991fdf7` |
+| Current working branch | VERIFIED | local `main` fast-forwarded to `origin/main` before this factual docs-only update |
 | GitHub publication | VERIFIED PUBLIC | Read-only check 2026-08-30: `PUBLIC`, default branch `main`; no visibility change performed in PR-02 |
-| CI acceptance | VERIFIED | PR-02 run `33298030728`: Release build PASS; official tests 309/309 PASS |
+| CI acceptance | VERIFIED | PR-03 final run `33299985960`: Release build PASS; official tests 323/323 PASS |
 | Older sprint commit IDs | PRE-SEPARATION LOCAL HISTORY | IDs in older evidence documents are preserved by the verified bundle and are not ancestors of the recreated root |
 | Tag / release | NOT RUN | Не разрешены; проверяемых идентификаторов нет |
 
@@ -72,7 +72,10 @@
 - Signed packaged executable SHA-256:
   `91026b011e7b55376dec773471be3a542d8ee8aa4685a9a6a90279c3d25e4a9c`.
 - Backup, GUI, live network, notarization, tag and release: NOT RUN.
-- Implementation commit `89e645e`; GitHub push/PR/CI/merge: PENDING.
+- Implementation commit `89e645e`; test-only correction `2a0c938`.
+- Pull request `#8` final CI `33299985960`: Release build PASS, official tests
+  323/323 PASS. Merged to `main` as
+  `8ba6fbfb2a15ee2a8f9fb2a6d4fbdf4f2991fdf7`.
 
 ## Формат backup-записи
 

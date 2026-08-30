@@ -56,3 +56,14 @@ Classify findings P0/P1/P2 and explicitly check:
 Explicit exclusions: visual behavior, credentials, private endpoints,
 `/api/v3/order/test`, production order/cancel/withdraw/transfer routes, money
 actions, new venues, reconnect policy, MainViewModel refactor and PR-04 soak.
+
+## Superseding acceptance
+
+- The first CI run exposed only a double-count defect in the test stream; no
+  production file changed in the correction.
+- Test-only commit `2a0c938` passed final GitHub CI `33299985960`: Release build
+  PASS; official deterministic suite 323/323 PASS.
+- Pull request `#8` merged to `main` as
+  `8ba6fbfb2a15ee2a8f9fb2a6d4fbdf4f2991fdf7`.
+- The explicit shared JSON-depth constant remains a documented P2 follow-up;
+  parsing is still bounded by the .NET default maximum depth.
