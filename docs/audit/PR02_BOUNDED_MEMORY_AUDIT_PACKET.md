@@ -2,8 +2,9 @@
 
 ## Reviewer task
 
-Review the exact uncommitted diff on branch `codex/bounded-orderbook-memory`
-against merged baseline `f69d1a1f59c18546d8e5cdaa2683f64caf78f691`.
+Review exact implementation commit `c7f3ce0` on branch
+`codex/bounded-orderbook-memory` against merged baseline
+`f69d1a1f59c18546d8e5cdaa2683f64caf78f691`.
 Implementation evidence is in
 [`../pr02-bounded-memory-evidence.md`](../pr02-bounded-memory-evidence.md).
 

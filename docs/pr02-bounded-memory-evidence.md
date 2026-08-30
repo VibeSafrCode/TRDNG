@@ -53,7 +53,7 @@ Date: 2026-08-30 (+05:00).
 
 ## Debt and next gate
 
-- `OPEN`: independent review of the exact uncommitted PR-02 diff.
+- `OPEN`: independent review of exact PR-02 implementation commit `c7f3ce0`.
 - `OPEN`: official deterministic runtime suite must pass once in GitHub CI after
   accepted commit/pull request.
 - `OPEN`: PR-04 still owns the real Mac memory soak and agreed footprint limits;
@@ -64,5 +64,6 @@ Date: 2026-08-30 (+05:00).
 - Rollback: revert only the PR-02 implementation/evidence changes. PR-01 merge
   `f69d1a1` remains the baseline.
 
-No commit, push, pull request, merge, tag, notarization or release has been
-performed for PR-02 at the time of this evidence record.
+Implementation and closure evidence are isolated in local commit `c7f3ce0`
+(`fix: bound order book and cluster memory`). Push, pull request, merge, tag,
+notarization and release have not been performed at the time of this update.
