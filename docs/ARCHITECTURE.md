@@ -61,6 +61,14 @@ before its REST snapshot bridge. Current trade-cluster intervals have independen
 price-level and trade-count caps; an overflowed partial interval is suppressed
 and reported through core metrics.
 
+Local memory observability is deliberately process-local and bounded. The
+deterministic soak tool replays bounded books, clusters and market-selection
+lifecycle without network or credentials, retains a fixed sample window and
+emits counter-only JSONL. It is not production telemetry. Native macOS release
+evidence still comes from the exact signed app with `footprint` and `vmmap`;
+missing runtime private-memory counters are represented as unavailable rather
+than zero.
+
 ## State and lifecycle
 
 - Selection is canonical `asset + product`, generation-scoped and latest-request-wins; old callbacks cannot populate a new selection.
@@ -76,3 +84,5 @@ and reported through core metrics.
 - [Canonical document index](source-of-truth.md)
 - [Security policy](../SECURITY.md)
 - [PR-03 bounded HTTP evidence](pr03-bounded-http-evidence.md)
+- [PR-04 memory observability evidence](pr04-memory-soak-evidence.md)
+- [Memory soak runbook](memory-soak-runbook.md)
