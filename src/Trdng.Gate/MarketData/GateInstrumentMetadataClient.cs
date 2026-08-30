@@ -1,11 +1,13 @@
 using System.Globalization;
 using System.Text.Json;
 using Trdng.Core.Instruments;
+using Trdng.Core.MarketData;
 
 namespace Trdng.Gate.MarketData;
 
 public sealed class GateInstrumentMetadataClient(HttpClient httpClient)
 {
+    internal const int MaximumContractsBytes = 8 * 1024 * 1024;
     private static readonly Uri Endpoint =
         new("https://api.gateio.ws/api/v4/futures/usdt/contracts");
 
@@ -14,7 +16,8 @@ public sealed class GateInstrumentMetadataClient(HttpClient httpClient)
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(contract);
-        var json = await httpClient.GetByteArrayAsync(Endpoint, cancellationToken)
+        var json = await BoundedHttpContentReader.GetJsonBytesAsync(
+            httpClient, Endpoint, MaximumContractsBytes, cancellationToken)
             .ConfigureAwait(false);
         return ParseTickSize(json, contract);
     }
@@ -22,7 +25,8 @@ public sealed class GateInstrumentMetadataClient(HttpClient httpClient)
     public async Task<IReadOnlyList<PublicCatalogEntry>> GetUsdtPerpetualCatalogAsync(
         CancellationToken cancellationToken = default)
     {
-        var json = await httpClient.GetByteArrayAsync(Endpoint, cancellationToken)
+        var json = await BoundedHttpContentReader.GetJsonBytesAsync(
+            httpClient, Endpoint, MaximumContractsBytes, cancellationToken)
             .ConfigureAwait(false);
         return ParseCatalog(json);
     }
