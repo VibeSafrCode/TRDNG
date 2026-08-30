@@ -126,6 +126,32 @@ public sealed class MexcPrivateFoundationTests
     }
 
     [Fact]
+    public async Task CredentialReadDelayIsAppliedBeforeSignedTimestampIsCreated()
+    {
+        var handler = new QueueHandler(Json(HttpStatusCode.OK,
+            "{\"canTrade\":true,\"accountType\":\"SPOT\",\"balances\":[]}"));
+        var vault = new FakeVault();
+        vault.Set(MexcCredentialProvider.ApiKeyIdentity, "synthetic-key");
+        vault.Set(MexcCredentialProvider.SecretIdentity, "synthetic-secret");
+        var now = 10_100L;
+        vault.OnRead = identity =>
+        {
+            if (identity == MexcCredentialProvider.SecretIdentity) now = 14_500L;
+        };
+        var time = new MexcTimeSynchronizer(TimeSpan.FromSeconds(10),
+            TimeSpan.FromSeconds(1));
+        Assert.True(time.Record(20_000, 10_000, 10_100));
+        using var client = new MexcPrivateClient(handler,
+            new MexcCredentialProvider(vault),
+            new MexcOrderTestCredentialProvider(vault), time, () => now,
+            TimeSpan.FromSeconds(1), 5000, new MexcPrivateAudit(4));
+
+        Assert.Equal(MexcPrivateState.Ready, (await client.GetAccountAsync()).State);
+        Assert.Contains("timestamp=24450", handler.RequestUris.Single().Query,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task ReadOnlyCallsNeverReadOrderTestIdentities()
     {
         var vault = new FakeVault();
@@ -147,27 +173,92 @@ public sealed class MexcPrivateFoundationTests
     }
 
     [Theory]
-    [InlineData(HttpStatusCode.Forbidden, 700007, MexcPrivateState.PermissionDenied)]
-    [InlineData(HttpStatusCode.TooManyRequests, 429, MexcPrivateState.RateLimited)]
-    [InlineData(HttpStatusCode.BadRequest, 700003, MexcPrivateState.TimeUnsynced)]
-    [InlineData(HttpStatusCode.InternalServerError, 500, MexcPrivateState.Unavailable)]
+    [InlineData(HttpStatusCode.BadRequest, 10072, MexcPrivateState.PermissionDenied,
+        MexcFailureReason.InvalidApiKey)]
+    [InlineData(HttpStatusCode.BadRequest, 700006, MexcPrivateState.PermissionDenied,
+        MexcFailureReason.IpNotAllowed)]
+    [InlineData(HttpStatusCode.Forbidden, 700007, MexcPrivateState.PermissionDenied,
+        MexcFailureReason.EndpointPermissionDenied)]
+    [InlineData(HttpStatusCode.BadRequest, 700002, MexcPrivateState.Error,
+        MexcFailureReason.InvalidSignature)]
+    [InlineData(HttpStatusCode.BadRequest, 602, MexcPrivateState.Error,
+        MexcFailureReason.InvalidSignature)]
+    [InlineData(HttpStatusCode.TooManyRequests, 429, MexcPrivateState.RateLimited,
+        MexcFailureReason.RateLimited)]
+    [InlineData(HttpStatusCode.BadRequest, 700003, MexcPrivateState.TimeUnsynced,
+        MexcFailureReason.TimeWindow)]
+    [InlineData(HttpStatusCode.InternalServerError, 500, MexcPrivateState.Unavailable,
+        MexcFailureReason.UpstreamUnavailable)]
     public async Task ErrorsAreTypedAndNeverRetried(HttpStatusCode status, int code,
-        MexcPrivateState expected)
+        MexcPrivateState expected, MexcFailureReason reason)
     {
         var handler = new QueueHandler(Json(status, $"{{\"code\":{code},\"msg\":\"sentinel-secret\"}}"));
         var audit = new MexcPrivateAudit(4, () => DateTimeOffset.UnixEpoch);
         var client = Client(handler, audit);
         var result = await client.GetAccountAsync();
         Assert.Equal(expected, result.State);
+        Assert.Equal(new MexcDiagnostic((int)status, code, reason), result.Diagnostic);
+        Assert.Equal(result.Diagnostic, audit.Events.Single().Diagnostic);
         Assert.Equal(1, handler.Count);
         Assert.DoesNotContain("sentinel", string.Join('|', audit.Events));
+        Assert.DoesNotContain("sentinel", result.Diagnostic!.ToString(),
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.Forbidden, null, MexcFailureReason.HttpForbiddenUnknown)]
+    [InlineData(HttpStatusCode.Unauthorized, null, MexcFailureReason.Unauthorized)]
+    [InlineData(HttpStatusCode.Forbidden, 403, MexcFailureReason.AccessDenied)]
+    [InlineData(HttpStatusCode.Unauthorized, 401, MexcFailureReason.Unauthorized)]
+    public async Task UnknownHttpAndVendorAuthorityCodesRemainDistinct(
+        HttpStatusCode status, int? code, MexcFailureReason reason)
+    {
+        var body = code is null ? "<html>denied</html>" : $"{{\"code\":{code}}}";
+        var handler = new QueueHandler(new HttpResponseMessage(status)
+        { Content = new StringContent(body, Encoding.UTF8, "text/plain") });
+        var result = await Client(handler).GetAccountAsync();
+        Assert.Equal(MexcPrivateState.PermissionDenied, result.State);
+        Assert.Equal(new MexcDiagnostic((int)status, code, reason), result.Diagnostic);
+        Assert.Equal(1, handler.Count);
+    }
+
+    [Fact]
+    public async Task StringErrorCodeIsParsedWithoutRetainingMessageOrBody()
+    {
+        var handler = new QueueHandler(Json(HttpStatusCode.BadRequest,
+            "{\"code\":\"10072\",\"msg\":\"sentinel-secret\"}"));
+        var audit = new MexcPrivateAudit(4, () => DateTimeOffset.UnixEpoch);
+        var result = await Client(handler, audit).GetAccountAsync();
+        Assert.Equal(MexcPrivateState.PermissionDenied, result.State);
+        Assert.Equal(new MexcDiagnostic(400, 10072, MexcFailureReason.InvalidApiKey),
+            result.Diagnostic);
+        var retained = $"{result.Diagnostic}|{string.Join('|', audit.Events)}";
+        Assert.DoesNotContain("sentinel", retained, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("secret", retained, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("signature", retained, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("X-MEXC-APIKEY", retained, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task VendorErrorInsideHttpSuccessIsDiagnosedBeforePayloadParsing()
+    {
+        var handler = new QueueHandler(Json(HttpStatusCode.OK,
+            "{\"code\":10072,\"msg\":\"sentinel-secret\"}"));
+        var result = await Client(handler).GetAccountAsync();
+        Assert.Equal(MexcPrivateState.PermissionDenied, result.State);
+        Assert.Equal(new MexcDiagnostic(200, 10072, MexcFailureReason.InvalidApiKey),
+            result.Diagnostic);
+        Assert.Equal(1, handler.Count);
     }
 
     [Fact]
     public async Task MalformedPayloadIsErrorAndCallerCancellationPropagates()
     {
         var malformed = new QueueHandler(Json(HttpStatusCode.OK, "{}"));
-        Assert.Equal(MexcPrivateState.Error, (await Client(malformed).GetAccountAsync()).State);
+        var result = await Client(malformed).GetAccountAsync();
+        Assert.Equal(MexcPrivateState.Error, result.State);
+        Assert.Equal(new MexcDiagnostic(200, null, MexcFailureReason.ProtocolError),
+            result.Diagnostic);
         using var cancelled = new CancellationTokenSource();
         cancelled.Cancel();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
@@ -286,6 +377,7 @@ public sealed class MexcPrivateFoundationTests
         private readonly Queue<HttpResponseMessage> _responses = new(responses);
         public int Count { get; private set; }
         public List<(HttpMethod Method, string Path)> Requests { get; } = [];
+        public List<Uri> RequestUris { get; } = [];
         public bool AllHadApiKeyHeader { get; private set; } = true;
         public bool AllHadSignature { get; private set; } = true;
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,
@@ -294,6 +386,7 @@ public sealed class MexcPrivateFoundationTests
             cancellationToken.ThrowIfCancellationRequested();
             Count++;
             Requests.Add((request.Method, request.RequestUri!.AbsolutePath));
+            RequestUris.Add(request.RequestUri);
             AllHadApiKeyHeader &= request.Headers.Contains("X-MEXC-APIKEY");
             AllHadSignature &= request.RequestUri.Query.Contains("signature=", StringComparison.Ordinal);
             return Task.FromResult(_responses.Dequeue());
@@ -305,6 +398,7 @@ public sealed class MexcPrivateFoundationTests
         private readonly Dictionary<CredentialIdentity, byte[]> _values = [];
         public int ReadCount { get; private set; }
         public List<CredentialIdentity> ReadIdentities { get; } = [];
+        public Action<CredentialIdentity>? OnRead { get; set; }
         public void Set(CredentialIdentity identity, string value) =>
             _values[identity] = Encoding.UTF8.GetBytes(value);
         public void SetBytes(CredentialIdentity identity, byte[] value) =>
@@ -314,6 +408,7 @@ public sealed class MexcPrivateFoundationTests
         {
             ReadCount++;
             ReadIdentities.Add(identity);
+            OnRead?.Invoke(identity);
             return ValueTask.FromResult(_values.TryGetValue(identity, out var value)
                 ? new CredentialReadResult(CredentialVaultState.Stored,
                     new SecretLease(value.ToArray()), "STORED")

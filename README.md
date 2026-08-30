@@ -1,6 +1,6 @@
-# TRDNG — macOS multi-venue scalping terminal
+# MacMakeMoney_618 (MMM_618) — macOS multi-venue scalping terminal
 
-TRDNG is an independent macOS terminal under active Stage 1 development. It keeps each venue book separate while presenting one canonical asset and product across MEXC, Gate and Bybit. The current build is for research, public market data and strictly local simulation. **Production trading is not implemented or enabled.**
+MacMakeMoney_618 (`MMM_618`) is an independent macOS terminal under active Stage 1 development. The repository and internal code namespace remain `TRDNG` for compatibility. The terminal keeps each venue book separate while presenting one canonical asset and product across MEXC, Gate and Bybit. The current build is for research, public market data and strictly local simulation. **Production trading is not implemented or enabled.**
 
 ## Current Stage 1 capabilities
 
@@ -10,8 +10,12 @@ TRDNG is an independent macOS terminal under active Stage 1 development. It keep
 - Shared comparison only for fresh comparable books—never merged liquidity or smart routing.
 - Dry-run market intents, official-filter validation, simulation-only risk limits, STOP, two-step confirmation, journaled simulation and restart reconciliation.
 - macOS Keychain boundary with separate MEXC read-only and order-test identities.
-- MEXC read-only account/open-orders foundation; no authenticated smoke has run.
-- Single-use MEXC `/api/v3/order/test` validation probe. It requires a trade-enabled key, creates no order, and never enables production filters or trading.
+- MEXC read-only account/open-orders foundation; a later owner-run acceptance
+  succeeded after local key replacement, while archival runtime evidence remains
+  intentionally masked.
+- Single-use MEXC `/api/v3/order/test` validation probe. The first authenticated
+  probe was rejected and remains diagnostically open; this endpoint creates no
+  order and never enables production filters or trading.
 
 No API keys are included. Never put credentials in source, issues, chat, shell arguments, environment variables, logs or screenshots. See [SECURITY.md](SECURITY.md).
 

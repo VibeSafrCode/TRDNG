@@ -8,10 +8,15 @@ public sealed class MacOsKeychainCredentialVault : ICredentialVault
 {
     private const string Service = "com.trdng.desktop.credentials.v1";
     private const int Success = 0;
+    private const int UserCanceled = -128;
     private const int DuplicateItem = -25299;
     private const int ItemNotFound = -25300;
+    private const int NotAvailable = -25291;
     private const int AuthFailed = -25293;
+    private const int NoSuchKeychain = -25294;
     private const int InteractionNotAllowed = -25308;
+    private const int InteractionRequired = -25315;
+    private const int DecodeFailure = -26275;
     private const int InvalidParameter = -50;
     private const int MissingEntitlement = -34018;
     // Local defensive boundary; exchange credentials are far smaller than 16 KiB.
@@ -207,9 +212,20 @@ public sealed class MacOsKeychainCredentialVault : ICredentialVault
             CredentialFailureCode.DuplicateItem, CredentialDiagnosticStage.SecItem),
         AuthFailed => new(CredentialVaultState.Denied, "KEYCHAIN ACCESS DENIED",
             CredentialFailureCode.AuthenticationFailed, CredentialDiagnosticStage.SecItem),
+        UserCanceled => new(CredentialVaultState.Denied, "KEYCHAIN ACCESS CANCELED",
+            CredentialFailureCode.UserCanceled, CredentialDiagnosticStage.SecItem),
+        NotAvailable => new(CredentialVaultState.Unavailable, "KEYCHAIN UNAVAILABLE",
+            CredentialFailureCode.KeychainUnavailable, CredentialDiagnosticStage.SecItem),
+        NoSuchKeychain => new(CredentialVaultState.Unavailable, "KEYCHAIN NOT FOUND",
+            CredentialFailureCode.KeychainNotFound, CredentialDiagnosticStage.SecItem),
         InteractionNotAllowed => new(CredentialVaultState.Unavailable,
             "UNLOCKED USER SESSION REQUIRED", CredentialFailureCode.InteractionNotAllowed,
             CredentialDiagnosticStage.SecItem),
+        InteractionRequired => new(CredentialVaultState.Unavailable,
+            "KEYCHAIN INTERACTION REQUIRED", CredentialFailureCode.InteractionRequired,
+            CredentialDiagnosticStage.SecItem),
+        DecodeFailure => new(CredentialVaultState.Error, "KEYCHAIN DATA INVALID",
+            CredentialFailureCode.DecodeFailure, CredentialDiagnosticStage.SecItem),
         MissingEntitlement => new(CredentialVaultState.Denied, "KEYCHAIN ACCESS DENIED",
             CredentialFailureCode.MissingEntitlement, CredentialDiagnosticStage.SecItem),
         InvalidParameter => new(CredentialVaultState.Error, "KEYCHAIN PARAMETER ERROR",

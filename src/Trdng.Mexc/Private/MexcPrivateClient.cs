@@ -6,7 +6,8 @@ namespace Trdng.Mexc.Private;
 
 public enum MexcPrivateAuditAction { TimeSync, Account, OpenOrders, OrderTest }
 public sealed record MexcPrivateAuditEvent(DateTimeOffset Timestamp,
-    MexcPrivateAuditAction Action, MexcPrivateState State);
+    MexcPrivateAuditAction Action, MexcPrivateState State,
+    MexcDiagnostic? Diagnostic = null);
 
 public sealed class MexcPrivateAudit
 {
@@ -22,9 +23,10 @@ public sealed class MexcPrivateAudit
     }
     public IReadOnlyList<MexcPrivateAuditEvent> Events
     { get { lock (_sync) return _events.ToArray(); } }
-    public void Add(MexcPrivateAuditAction action, MexcPrivateState state)
+    public void Add(MexcPrivateAuditAction action, MexcPrivateState state,
+        MexcDiagnostic? diagnostic = null)
     {
-        var item = new MexcPrivateAuditEvent(_clock(), action, state);
+        var item = new MexcPrivateAuditEvent(_clock(), action, state, diagnostic);
         lock (_sync)
         {
             while (_events.Count >= _capacity) _events.Dequeue();
@@ -130,15 +132,12 @@ public sealed class MexcPrivateClient : IDisposable
         if (authorization is null || !authorization.TryConsume() ||
             MexcOrderTestPolicy.Parameters(authorization) is not { } parameters)
             return AuditTest(MexcOrderTestState.TestRejected);
-        long timestamp;
         try
         {
-            var now = _clockMilliseconds();
-            if (!_time.TryTimestamp(now, out timestamp))
+            if (!_time.TryTimestamp(_clockMilliseconds(), out _))
                 return AuditTest(MexcOrderTestState.TimeUnsynced);
         }
         catch { return AuditTest(MexcOrderTestState.Error); }
-
         MexcCredentialResult credentialResult;
         try { credentialResult = await _orderTestCredentials.ReadAsync(cancellationToken).ConfigureAwait(false); }
         catch (OperationCanceledException) { throw; }
@@ -148,6 +147,9 @@ public sealed class MexcPrivateClient : IDisposable
         using var credentials = credentialResult.Lease;
         try
         {
+            var now = _clockMilliseconds();
+            if (!_time.TryTimestamp(now, out var timestamp))
+                return AuditTest(MexcOrderTestState.TimeUnsynced);
             using var signed = MexcSignedRequestBuilder.BuildOrderTestPost(parameters, timestamp,
                 _recvWindow, credentials.ApiKey, credentials.Secret);
             using var timeout = LinkedTimeout(cancellationToken);
@@ -176,7 +178,6 @@ public sealed class MexcPrivateClient : IDisposable
             return ProbeFail(MexcOrderTestState.TestRejected);
         var candidate = authorization.Candidate;
         long localNow;
-        long timestamp;
         try
         {
             localNow = _clockMilliseconds();
@@ -185,7 +186,7 @@ public sealed class MexcPrivateClient : IDisposable
                 now > candidate.MetadataValidUntil ||
                 (candidate.ReferencePriceValidUntil is { } referenceUntil && now > referenceUntil))
                 return ProbeFail(MexcOrderTestState.TestRejected);
-            if (!_time.TryTimestamp(localNow, out timestamp))
+            if (!_time.TryTimestamp(localNow, out _))
                 return ProbeFail(MexcOrderTestState.TimeUnsynced);
         }
         catch { return ProbeFail(MexcOrderTestState.Error); }
@@ -203,6 +204,14 @@ public sealed class MexcPrivateClient : IDisposable
         using var credentials = credentialResult.Lease;
         try
         {
+            localNow = _clockMilliseconds();
+            var now = DateTimeOffset.FromUnixTimeMilliseconds(localNow);
+            if (!MexcOrderTestProbePolicy.HasValidFingerprint(candidate) ||
+                now > candidate.MetadataValidUntil ||
+                (candidate.ReferencePriceValidUntil is { } referenceUntil && now > referenceUntil))
+                return ProbeFail(MexcOrderTestState.TestRejected);
+            if (!_time.TryTimestamp(localNow, out var timestamp))
+                return ProbeFail(MexcOrderTestState.TimeUnsynced);
             var parameters = new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 ["symbol"] = candidate.Symbol,
@@ -222,10 +231,16 @@ public sealed class MexcPrivateClient : IDisposable
             using var response = await _http.SendAsync(signed.Request, timeout.Token)
                 .ConfigureAwait(false);
             var bytes = await ReadBoundedAsync(response, timeout.Token).ConfigureAwait(false);
-            if (!response.IsSuccessStatusCode)
-                return ProbeFail(MapOrderTestError(response.StatusCode,
-                    MexcPrivateJson.ErrorCode(bytes)));
-            if (!IsExactEmptyObject(bytes)) return ProbeFail(MexcOrderTestState.Error);
+            var errorCode = MexcPrivateJson.ErrorCode(bytes);
+            if (!response.IsSuccessStatusCode || errorCode is not null)
+            {
+                var diagnostic = Diagnose(response.StatusCode, errorCode);
+                return ProbeFail(MapOrderTestError(response.StatusCode, errorCode), diagnostic);
+            }
+            if (!IsExactEmptyObject(bytes))
+                return ProbeFail(MexcOrderTestState.Error,
+                    new MexcDiagnostic((int)response.StatusCode, null,
+                        MexcFailureReason.ProtocolError));
             var observed = DateTimeOffset.FromUnixTimeMilliseconds(_clockMilliseconds());
             AuditTest(MexcOrderTestState.TestReady);
             return new(MexcOrderTestState.TestReady, new(candidate.Symbol, candidate.Side,
@@ -245,11 +260,9 @@ public sealed class MexcPrivateClient : IDisposable
         IReadOnlyDictionary<string, string?> parameters, MexcPrivateAuditAction action,
         Func<ReadOnlyMemory<byte>, T> parser, CancellationToken cancellationToken)
     {
-        long timestamp;
         try
         {
-            var now = _clockMilliseconds();
-            if (!_time.TryTimestamp(now, out timestamp))
+            if (!_time.TryTimestamp(_clockMilliseconds(), out _))
                 return Fail<T>(action, MexcPrivateState.TimeUnsynced);
         }
         catch (OperationCanceledException) { throw; }
@@ -263,13 +276,20 @@ public sealed class MexcPrivateClient : IDisposable
         using var credentials = credentialResult.Lease;
         try
         {
+            var now = _clockMilliseconds();
+            if (!_time.TryTimestamp(now, out var timestamp))
+                return Fail<T>(action, MexcPrivateState.TimeUnsynced);
             using var signed = MexcSignedRequestBuilder.BuildGet(path, parameters, timestamp,
                 _recvWindow, credentials.ApiKey, credentials.Secret);
             using var timeout = LinkedTimeout(cancellationToken);
             using var response = await _http.SendAsync(signed.Request, timeout.Token).ConfigureAwait(false);
             var bytes = await ReadBoundedAsync(response, timeout.Token).ConfigureAwait(false);
-            if (!response.IsSuccessStatusCode)
-                return Fail<T>(action, MapError(response.StatusCode, MexcPrivateJson.ErrorCode(bytes)));
+            var errorCode = MexcPrivateJson.ErrorCode(bytes);
+            if (!response.IsSuccessStatusCode || errorCode is not null)
+            {
+                var diagnostic = Diagnose(response.StatusCode, errorCode);
+                return Fail<T>(action, MapDiagnostic(diagnostic), diagnostic);
+            }
             try
             {
                 var value = parser(bytes);
@@ -278,7 +298,11 @@ public sealed class MexcPrivateClient : IDisposable
             }
             catch (Exception exception) when (exception is InvalidDataException or
                 System.Text.Json.JsonException or KeyNotFoundException or FormatException)
-            { return Fail<T>(action, MexcPrivateState.Error); }
+            {
+                var diagnostic = new MexcDiagnostic((int)response.StatusCode, null,
+                    MexcFailureReason.ProtocolError);
+                return Fail<T>(action, MexcPrivateState.Error, diagnostic);
+            }
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         { return Fail<T>(action, MexcPrivateState.Unavailable); }
@@ -329,10 +353,15 @@ public sealed class MexcPrivateClient : IDisposable
 
     private MexcPrivateState Audit(MexcPrivateAuditAction action, MexcPrivateState state)
     { _audit.Add(action, state); return state; }
-    private MexcPrivateResult<T> Fail<T>(MexcPrivateAuditAction action, MexcPrivateState state)
-    { _audit.Add(action, state); return MexcPrivateResult<T>.Fail(state); }
+    private MexcPrivateResult<T> Fail<T>(MexcPrivateAuditAction action, MexcPrivateState state,
+        MexcDiagnostic? diagnostic = null)
+    {
+        _audit.Add(action, state, diagnostic);
+        return MexcPrivateResult<T>.Fail(state, diagnostic);
+    }
 
-    private MexcOrderTestState AuditTest(MexcOrderTestState state)
+    private MexcOrderTestState AuditTest(MexcOrderTestState state,
+        MexcDiagnostic? diagnostic = null)
     {
         _audit.Add(MexcPrivateAuditAction.OrderTest, state == MexcOrderTestState.TestReady
             ? MexcPrivateState.Ready : state switch
@@ -344,12 +373,13 @@ public sealed class MexcPrivateClient : IDisposable
                 MexcOrderTestState.RateLimited => MexcPrivateState.RateLimited,
                 MexcOrderTestState.Unavailable => MexcPrivateState.Unavailable,
                 _ => MexcPrivateState.Error
-            });
+            }, diagnostic);
         return state;
     }
 
-    private MexcProbeExecutionResult ProbeFail(MexcOrderTestState state)
-    { AuditTest(state); return new(state, null); }
+    private MexcProbeExecutionResult ProbeFail(MexcOrderTestState state,
+        MexcDiagnostic? diagnostic = null)
+    { AuditTest(state, diagnostic); return new(state, null, diagnostic); }
 
     private static bool IsExactEmptyObject(ReadOnlyMemory<byte> bytes)
     {
@@ -376,18 +406,51 @@ public sealed class MexcPrivateClient : IDisposable
     private static MexcOrderTestState MapOrderTestError(
         System.Net.HttpStatusCode status, int? code)
     {
-        var mapped = MapTest(MapError(status, code));
+        var mapped = MapTest(MapDiagnostic(Diagnose(status, code)));
         return mapped == MexcOrderTestState.Error && (int)status is >= 400 and < 500
             ? MexcOrderTestState.TestRejected : mapped;
     }
 
-    private static MexcPrivateState MapError(System.Net.HttpStatusCode status, int? code) => code switch
+    internal static MexcDiagnostic Diagnose(System.Net.HttpStatusCode status, int? code)
     {
-        700003 or 10073 => MexcPrivateState.TimeUnsynced,
-        401 or 403 or 700006 or 700007 or 10072 => MexcPrivateState.PermissionDenied,
-        429 => MexcPrivateState.RateLimited,
-        _ => MapHttp(status)
-    };
+        var reason = code switch
+        {
+            700001 => MexcFailureReason.InvalidApiKeyFormat,
+            10072 => MexcFailureReason.InvalidApiKey,
+            700002 or 602 => MexcFailureReason.InvalidSignature,
+            700003 or 10073 => MexcFailureReason.TimeWindow,
+            700006 => MexcFailureReason.IpNotAllowed,
+            700007 => MexcFailureReason.EndpointPermissionDenied,
+            401 => MexcFailureReason.Unauthorized,
+            403 => MexcFailureReason.AccessDenied,
+            429 => MexcFailureReason.RateLimited,
+            _ when status == System.Net.HttpStatusCode.Unauthorized =>
+                MexcFailureReason.Unauthorized,
+            _ when status == System.Net.HttpStatusCode.Forbidden =>
+                MexcFailureReason.HttpForbiddenUnknown,
+            _ when status == System.Net.HttpStatusCode.TooManyRequests =>
+                MexcFailureReason.RateLimited,
+            _ when (int)status >= 500 => MexcFailureReason.UpstreamUnavailable,
+            _ => MexcFailureReason.ProtocolError
+        };
+        return new((int)status, code, reason);
+    }
+
+    private static MexcPrivateState MapError(System.Net.HttpStatusCode status, int? code) =>
+        MapDiagnostic(Diagnose(status, code));
+
+    private static MexcPrivateState MapDiagnostic(MexcDiagnostic diagnostic) =>
+        diagnostic.Reason switch
+        {
+            MexcFailureReason.InvalidApiKeyFormat or MexcFailureReason.InvalidApiKey or
+                MexcFailureReason.IpNotAllowed or MexcFailureReason.EndpointPermissionDenied or
+                MexcFailureReason.Unauthorized or MexcFailureReason.AccessDenied or
+                MexcFailureReason.HttpForbiddenUnknown => MexcPrivateState.PermissionDenied,
+            MexcFailureReason.TimeWindow => MexcPrivateState.TimeUnsynced,
+            MexcFailureReason.RateLimited => MexcPrivateState.RateLimited,
+            MexcFailureReason.UpstreamUnavailable => MexcPrivateState.Unavailable,
+            _ => MexcPrivateState.Error
+        };
 
     private static MexcPrivateState MapHttp(System.Net.HttpStatusCode status) =>
         status == System.Net.HttpStatusCode.TooManyRequests ? MexcPrivateState.RateLimited :

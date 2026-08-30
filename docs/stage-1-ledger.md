@@ -382,3 +382,54 @@ Baseline зафиксирован: 2026-08-02 11:31 +05:00.
 - Commit `ae0b6a52a55d7c94d68417f4e68412914ae72e63` was pushed to private `main`.
   Official GitHub CI `32383296540`: Release build PASS, 0 warnings/errors;
   269/269 tests PASS, 0 failed, 0 skipped.
+
+## S3.2 authenticated acceptance diagnostic — HISTORICAL BLOCKED / SUPERSEDED
+
+- Date: 2026-08-24. A bounded diagnostic patch distinguishes safe MEXC/HTTP and
+  Keychain failure categories without logging credentials, signatures or raw
+  response text.
+- Targeted assembly compile PASS, 0 warnings/errors; affected in-process tests
+  50/50 PASS. Official local VSTest was not retried after the known IPC denial.
+- Outside the Codex sandbox, both Keychain pairs are stored and the read-only pair
+  is readable; request signing and MEXC time synchronization PASS.
+- The first authenticated account request reached MEXC and returned HTTP 400,
+  code `10072`, `InvalidApiKey`. `openOrders` and `/api/v3/order/test` were not
+  called; no production order or money action occurred.
+- Next owner action: verify or replace only the MEXC READ-ONLY API key pair, then
+  rerun one S3.2 acceptance. S3.3 remains gated on full S3.2 PASS.
+
+### Superseding owner-run result
+
+- The owner subsequently replaced the READ-ONLY pair locally. Authenticated
+  account and open-orders acceptance then succeeded with masked evidence; no
+  credential value, signature, signed URL or private response payload entered
+  the repository.
+- Current S3.2 gate: `ACCEPTED (OWNER-RUN, MASKED)`. The earlier 10072 result is
+  retained only as historical diagnostic evidence.
+- One later isolated `/api/v3/order/test` probe returned `TestRejected`. It did
+  not create an order or change money. The final typed diagnostic rerun remains
+  `OPEN`; production `/api/v3/order` remains absent.
+
+## Audit PR-01 bounded WebSocket envelope — IMPLEMENTED / AUDIT OPEN
+
+- Date: 2026-08-28. Scope is only the first code task from the imported external
+  audit: one 1 MiB complete-message envelope shared by Bybit, Gate and MEXC.
+- Oversize/type-change failures are rejected before parsing with stable safe
+  codes; MEXC no longer retains a decoded text frame in diagnostics. Existing
+  venue reconnect/session-reset behavior is preserved.
+- New deterministic in-process scenarios: 9/9 PASS. One official local VSTest
+  attempt was blocked before execution by the known IPC `SocketException (13)`
+  and was not retried.
+- Full Release solution build: PASS, 0 warnings/errors. One osx-arm64 package and
+  strict ad-hoc codesign: PASS. GUI/live/private/auth/order/money: NOT RUN.
+- Evidence: [`pr01-bounded-websocket-evidence.md`](pr01-bounded-websocket-evidence.md).
+- Implementation is isolated in local commit `a3435bc`; independent review,
+  push and GitHub CI remain separate gates.
+
+### PR-01 publication
+
+- MEXC diagnostics `b0af3b2`, branding `665e1c4`, PR-01 implementation
+  `a3435bc` and evidence through `8f88ffb` were pushed to public branch
+  `codex/gpt-pro-audit-request`; remote SHA verification: PASS.
+- `main` was not changed. No PR/merge/release. No CI run was created because the
+  current workflow listens only to `main` pushes and pull requests.

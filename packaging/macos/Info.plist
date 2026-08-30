@@ -6,7 +6,7 @@
   <key>CFBundleDevelopmentRegion</key>
   <string>ru</string>
   <key>CFBundleDisplayName</key>
-  <string>TRDNG</string>
+  <string>MacMakeMoney_618</string>
   <key>CFBundleExecutable</key>
   <string>Trdng.Desktop</string>
   <key>CFBundleIdentifier</key>
@@ -14,7 +14,9 @@
   <key>CFBundleInfoDictionaryVersion</key>
   <string>6.0</string>
   <key>CFBundleName</key>
-  <string>TRDNG</string>
+  <string>MMM_618</string>
+  <key>CFBundleIconFile</key>
+  <string>MMM_618</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>

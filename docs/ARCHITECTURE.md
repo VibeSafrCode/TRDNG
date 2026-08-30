@@ -36,6 +36,14 @@ flowchart TD
 
 Public data contains no credentials. Read-only and order-test MEXC credentials use separate Keychain identities. Secrets are leased briefly and excluded from UI, audit and journals. Redirects, cookies and unsafe retries are disabled. The test path allows only `/order/test`; the production route is absent.
 
+Every public WebSocket connection passes complete text and binary messages through
+one fixed-size pooled envelope before any venue parser runs. The shared hard limit
+is 1 MiB. Fragmented messages are counted cumulatively; an oversized or
+type-inconsistent message is rejected with a stable safe code, the partial buffer
+is reset, and the venue session follows its existing reconnect/resynchronization
+path. Raw WebSocket payloads are not included in that error or in MEXC text-frame
+diagnostics.
+
 ## State and lifecycle
 
 - Selection is canonical `asset + product`, generation-scoped and latest-request-wins; old callbacks cannot populate a new selection.

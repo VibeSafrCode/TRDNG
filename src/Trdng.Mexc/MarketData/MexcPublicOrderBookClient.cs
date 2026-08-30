@@ -1,4 +1,3 @@
-using System.Buffers;
 using System.Net.WebSockets;
 using System.Text;
 using Trdng.Core.Clusters;
@@ -8,7 +7,6 @@ namespace Trdng.Mexc.MarketData;
 
 public sealed class MexcPublicOrderBookClient : IPublicMarketDataClient
 {
-    private const int MaxWebSocketMessageBytes = 1024 * 1024;
     private static readonly Uri WebSocketEndpoint = new("wss://wbs-api.mexc.com/ws");
     private readonly CancellationTokenSource _lifetime = new();
     private readonly HttpClient _httpClient;
@@ -85,6 +83,10 @@ public sealed class MexcPublicOrderBookClient : IPublicMarketDataClient
                 await syncLifetime.CancelAsync();
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { break; }
+            catch (WebSocketMessageEnvelopeException exception)
+            {
+                ChangeState(MarketDataConnectionState.Reconnecting, exception.SafeCode);
+            }
             catch (Exception exception) when (exception is WebSocketException or HttpRequestException or InvalidDataException or IOException)
             {
                 ChangeState(MarketDataConnectionState.Reconnecting, exception.Message);
@@ -102,48 +104,39 @@ public sealed class MexcPublicOrderBookClient : IPublicMarketDataClient
         Task<OrderBookUpdate> snapshotTask,
         CancellationToken cancellationToken)
     {
-        var rented = ArrayPool<byte>.Shared.Rent(64 * 1024);
-        var buffer = new ArrayBufferWriter<byte>(128 * 1024);
+        using var messageReader = new BoundedWebSocketMessageReader();
         var snapshotApplied = false;
-        try
+        while (socket.State == WebSocketState.Open && !cancellationToken.IsCancellationRequested)
         {
-            while (socket.State == WebSocketState.Open && !cancellationToken.IsCancellationRequested)
-            {
-                var result = await socket.ReceiveAsync(rented.AsMemory(), cancellationToken).ConfigureAwait(false);
-                if (result.MessageType == WebSocketMessageType.Close) return;
-                if (buffer.WrittenCount > MaxWebSocketMessageBytes - result.Count)
-                    throw new InvalidDataException("MEXC websocket message exceeds the 1 MiB safety limit.");
-                buffer.Write(rented.AsSpan(0, result.Count));
-                if (!result.EndOfMessage) continue;
+            var message = await messageReader.ReadAsync(socket, cancellationToken)
+                .ConfigureAwait(false);
+            if (message.MessageType == WebSocketMessageType.Close) return;
 
-                if (result.MessageType == WebSocketMessageType.Text)
+            if (message.MessageType == WebSocketMessageType.Text)
+            {
+                DiagnosticReceived?.Invoke($"MEXC_WS_TEXT_ACK bytes={message.Payload.Length}");
+            }
+            else if (message.MessageType == WebSocketMessageType.Binary &&
+                MexcProtobufDepthParser.TryParse(message.Payload, out var delta) && delta is not null)
+            {
+                DiagnosticReceived?.Invoke($"delta symbol={delta.Symbol} from={delta.FromVersion} to={delta.ToVersion} sendTime={delta.SendTime}");
+                var applyResult = _session.BufferOrApply(delta);
+                if (!snapshotApplied && snapshotTask.IsCompleted)
                 {
-                    DiagnosticReceived?.Invoke($"text {Encoding.UTF8.GetString(buffer.WrittenSpan)}");
+                    applyResult = _session.ApplySnapshot(await snapshotTask.ConfigureAwait(false));
+                    snapshotApplied = true;
+                    DiagnosticReceived?.Invoke($"snapshot version={_session.Engine.LastUpdateId} decision={_session.LastDecision}");
                 }
-                else if (result.MessageType == WebSocketMessageType.Binary &&
-                    MexcProtobufDepthParser.TryParse(buffer.WrittenMemory, out var delta) && delta is not null)
+                DiagnosticReceived?.Invoke($"decision={_session.LastDecision} result={applyResult}");
+                if (applyResult == MexcOrderBookApplyResult.ResyncRequired)
+                    throw new InvalidDataException("MEXC order-book continuity lost; reconnect/resnapshot required.");
+                if (_session.State == MexcOrderBookSessionState.Live)
                 {
-                    DiagnosticReceived?.Invoke($"delta symbol={delta.Symbol} from={delta.FromVersion} to={delta.ToVersion} sendTime={delta.SendTime}");
-                    var applyResult = _session.BufferOrApply(delta);
-                    if (!snapshotApplied && snapshotTask.IsCompleted)
-                    {
-                        applyResult = _session.ApplySnapshot(await snapshotTask.ConfigureAwait(false));
-                        snapshotApplied = true;
-                        DiagnosticReceived?.Invoke($"snapshot version={_session.Engine.LastUpdateId} decision={_session.LastDecision}");
-                    }
-                    DiagnosticReceived?.Invoke($"decision={_session.LastDecision} result={applyResult}");
-                    if (applyResult == MexcOrderBookApplyResult.ResyncRequired)
-                        throw new InvalidDataException("MEXC order-book continuity lost; reconnect/resnapshot required.");
-                    if (_session.State == MexcOrderBookSessionState.Live)
-                    {
-                        ChangeState(MarketDataConnectionState.Live);
-                        SnapshotReceived?.Invoke(_session.Engine.Capture(Math.Min(30, _depth)));
-                    }
+                    ChangeState(MarketDataConnectionState.Live);
+                    SnapshotReceived?.Invoke(_session.Engine.Capture(Math.Min(30, _depth)));
                 }
-                buffer.Clear();
             }
         }
-        finally { ArrayPool<byte>.Shared.Return(rented); }
     }
 
     private async Task<OrderBookUpdate> FetchSnapshotAsync(CancellationToken cancellationToken)
