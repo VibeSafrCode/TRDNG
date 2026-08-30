@@ -7,18 +7,23 @@ public sealed class MexcOrderBookSession
     private readonly List<MexcDepthDelta> _buffer = [];
     private readonly string _symbol;
     private readonly int _maxBufferedDeltas;
+    private readonly int _maxBufferedLevels;
     private OrderBookUpdate? _pendingSnapshot;
+    private int _bufferedLevelCount;
 
     public MexcOrderBookSession(
         OrderBookEngine engine,
         string symbol,
-        int maxBufferedDeltas = 2_048)
+        int maxBufferedDeltas = 2_048,
+        int maxBufferedLevels = 20_000)
     {
         Engine = engine ?? throw new ArgumentNullException(nameof(engine));
         ArgumentException.ThrowIfNullOrWhiteSpace(symbol);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxBufferedDeltas);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxBufferedLevels);
         _symbol = symbol.ToUpperInvariant();
         _maxBufferedDeltas = maxBufferedDeltas;
+        _maxBufferedLevels = maxBufferedLevels;
     }
 
     public OrderBookEngine Engine { get; }
@@ -42,16 +47,44 @@ public sealed class MexcOrderBookSession
 
         if (State == MexcOrderBookSessionState.WaitingForSnapshot)
         {
+            try
+            {
+                Engine.ValidateIncomingUpdate(ToUpdate(delta));
+            }
+            catch (OrderBookPolicyViolationException exception)
+            {
+                LastDecision = $"capacity:{exception.SafeCode}";
+                return RequireResync();
+            }
+
+            var deltaLevelCount = (long)delta.Bids.Count + delta.Asks.Count;
             if (_buffer.Count == _maxBufferedDeltas)
             {
                 LastDecision = $"buffer-cap:{_maxBufferedDeltas}";
                 return RequireResync();
             }
+            if ((long)_bufferedLevelCount + deltaLevelCount > _maxBufferedLevels)
+            {
+                LastDecision = $"buffer-level-cap:{_maxBufferedLevels}";
+                return RequireResync();
+            }
             _buffer.Add(delta);
+            _bufferedLevelCount += (int)deltaLevelCount;
             LastDecision = $"buffered:{delta.FromVersion}-{delta.ToVersion}";
-            return _pendingSnapshot is null
-                ? MexcOrderBookApplyResult.Buffered
-                : TryActivatePendingSnapshot();
+            if (_pendingSnapshot is null)
+            {
+                return MexcOrderBookApplyResult.Buffered;
+            }
+
+            try
+            {
+                return TryActivatePendingSnapshot();
+            }
+            catch (OrderBookPolicyViolationException exception)
+            {
+                LastDecision = $"capacity:{exception.SafeCode}";
+                return RequireResync();
+            }
         }
 
         if (delta.ToVersion <= LastVersion)
@@ -66,7 +99,15 @@ public sealed class MexcOrderBookSession
             return RequireResync();
         }
 
-        ApplyDelta(delta);
+        try
+        {
+            ApplyDelta(delta);
+        }
+        catch (OrderBookPolicyViolationException exception)
+        {
+            LastDecision = $"capacity:{exception.SafeCode}";
+            return RequireResync();
+        }
         LastDecision = $"delta-applied:{delta.FromVersion}-{delta.ToVersion}";
         return MexcOrderBookApplyResult.DeltaApplied;
     }
@@ -76,9 +117,28 @@ public sealed class MexcOrderBookSession
         ArgumentNullException.ThrowIfNull(snapshot);
         if (!string.Equals(snapshot.Symbol, _symbol, StringComparison.Ordinal))
             throw new InvalidDataException("MEXC snapshot symbol does not match this session.");
+
+        try
+        {
+            Engine.ValidateIncomingUpdate(snapshot);
+        }
+        catch (OrderBookPolicyViolationException exception)
+        {
+            LastDecision = $"capacity:{exception.SafeCode}";
+            return RequireResync();
+        }
+
         _pendingSnapshot = snapshot;
         LastDecision = $"snapshot-pending:{snapshot.UpdateId}";
-        return TryActivatePendingSnapshot();
+        try
+        {
+            return TryActivatePendingSnapshot();
+        }
+        catch (OrderBookPolicyViolationException exception)
+        {
+            LastDecision = $"capacity:{exception.SafeCode}";
+            return RequireResync();
+        }
     }
 
     private MexcOrderBookApplyResult TryActivatePendingSnapshot()
@@ -121,6 +181,7 @@ public sealed class MexcOrderBookSession
         State = MexcOrderBookSessionState.Live;
         _pendingSnapshot = null;
         _buffer.Clear();
+        _bufferedLevelCount = 0;
         LastDecision = $"bridge-success:snapshot={snapshot.UpdateId},last={LastVersion}";
         return MexcOrderBookApplyResult.SnapshotApplied;
     }
@@ -129,6 +190,7 @@ public sealed class MexcOrderBookSession
     {
         Engine.Reset();
         _buffer.Clear();
+        _bufferedLevelCount = 0;
         _pendingSnapshot = null;
         LastVersion = 0;
         State = MexcOrderBookSessionState.WaitingForSnapshot;
@@ -137,12 +199,7 @@ public sealed class MexcOrderBookSession
 
     private void ApplyDelta(MexcDepthDelta delta)
     {
-        var update = new OrderBookUpdate(
-            delta.Symbol,
-            delta.ToVersion,
-            delta.ToVersion,
-            delta.Bids,
-            delta.Asks);
+        var update = ToUpdate(delta);
         if (Engine.LastUpdateId == delta.ToVersion)
             return;
         if (!Engine.TryApplyDelta(update))
@@ -153,10 +210,18 @@ public sealed class MexcOrderBookSession
         LastVersion = delta.ToVersion;
     }
 
+    private static OrderBookUpdate ToUpdate(MexcDepthDelta delta) => new(
+        delta.Symbol,
+        delta.ToVersion,
+        delta.ToVersion,
+        delta.Bids,
+        delta.Asks);
+
     private MexcOrderBookApplyResult RequireResync()
     {
         Engine.Reset();
         _buffer.Clear();
+        _bufferedLevelCount = 0;
         _pendingSnapshot = null;
         LastVersion = 0;
         State = MexcOrderBookSessionState.ResyncRequired;

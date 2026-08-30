@@ -13,8 +13,7 @@ public sealed class BybitPublicOrderBookClient : IPublicMarketDataClient
         new("wss://stream.bybit.com/v5/public/linear");
 
     private readonly CancellationTokenSource _lifetime = new();
-    private readonly BybitOrderBookSession _session =
-        new(new OrderBookEngine());
+    private readonly BybitOrderBookSession _session;
     private readonly TradeClusterAggregator _clusterAggregator;
     private readonly string _symbol;
     private readonly int _depth;
@@ -36,6 +35,8 @@ public sealed class BybitPublicOrderBookClient : IPublicMarketDataClient
 
         _symbol = symbol.ToUpperInvariant();
         _depth = depth;
+        _session = new BybitOrderBookSession(new OrderBookEngine(
+            new OrderBookCapacityPolicy(depth, checked(depth * 2))));
         _clusterAggregator =
             new TradeClusterAggregator(TimeSpan.FromSeconds(15), clusterPriceStep);
     }
@@ -213,6 +214,11 @@ public sealed class BybitPublicOrderBookClient : IPublicMarketDataClient
         ref TimeSpan lastPublishedAt)
     {
         var result = _session.Apply(message);
+
+        if (result == OrderBookApplyResult.ResyncRequired)
+        {
+            throw new InvalidDataException("ORDER_BOOK_RESYNC_REQUIRED");
+        }
 
         if (result == OrderBookApplyResult.SnapshotApplied)
         {

@@ -2,20 +2,50 @@ using Trdng.Core.MarketData;
 
 namespace Trdng.Core.Clusters;
 
+public enum TradeClusterIngestResult
+{
+    Accepted,
+    IgnoredOutOfOrder,
+    CapacityExceeded,
+    IgnoredOverflowedInterval
+}
+
+public readonly record struct TradeClusterCapacityMetrics(
+    int CurrentPriceLevelCount,
+    int CurrentTradeCount,
+    bool IsCurrentIntervalOverflowed,
+    long AcceptedTradeCount,
+    long RejectedTradeCount,
+    long IgnoredOutOfOrderTradeCount,
+    long OverflowedClusterCount);
+
 public sealed class TradeClusterAggregator
 {
+    public const int DefaultMaximumPriceLevelsPerCluster = 4_096;
+    public const int DefaultMaximumTradesPerCluster = 100_000;
+
     private readonly TimeSpan _interval;
     private readonly decimal _priceStep;
     private readonly int _maxCompletedClusters;
+    private readonly int _maximumPriceLevelsPerCluster;
+    private readonly int _maximumTradesPerCluster;
     private readonly LinkedList<TradeCluster> _completed = [];
     private readonly SortedDictionary<decimal, MutableLevel> _currentLevels =
         new(Comparer<decimal>.Create(static (left, right) => right.CompareTo(left)));
     private DateTimeOffset? _currentStartsAt;
+    private int _currentTradeCount;
+    private bool _currentIntervalOverflowed;
+    private long _acceptedTradeCount;
+    private long _rejectedTradeCount;
+    private long _ignoredOutOfOrderTradeCount;
+    private long _overflowedClusterCount;
 
     public TradeClusterAggregator(
         TimeSpan interval,
         decimal priceStep,
-        int maxCompletedClusters = 240)
+        int maxCompletedClusters = 240,
+        int maximumPriceLevelsPerCluster = DefaultMaximumPriceLevelsPerCluster,
+        int maximumTradesPerCluster = DefaultMaximumTradesPerCluster)
     {
         if (interval <= TimeSpan.Zero)
         {
@@ -28,15 +58,28 @@ public sealed class TradeClusterAggregator
         }
 
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxCompletedClusters);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumPriceLevelsPerCluster);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumTradesPerCluster);
 
         _interval = interval;
         _priceStep = priceStep;
         _maxCompletedClusters = maxCompletedClusters;
+        _maximumPriceLevelsPerCluster = maximumPriceLevelsPerCluster;
+        _maximumTradesPerCluster = maximumTradesPerCluster;
     }
 
     public IReadOnlyCollection<TradeCluster> Completed => _completed;
 
-    public void Ingest(PublicTrade trade)
+    public TradeClusterCapacityMetrics Metrics => new(
+        _currentLevels.Count,
+        _currentTradeCount,
+        _currentIntervalOverflowed,
+        _acceptedTradeCount,
+        _rejectedTradeCount,
+        _ignoredOutOfOrderTradeCount,
+        _overflowedClusterCount);
+
+    public TradeClusterIngestResult Ingest(PublicTrade trade)
     {
         ArgumentNullException.ThrowIfNull(trade);
 
@@ -55,7 +98,8 @@ public sealed class TradeClusterAggregator
         }
         else if (bucketStart < _currentStartsAt)
         {
-            return;
+            _ignoredOutOfOrderTradeCount++;
+            return TradeClusterIngestResult.IgnoredOutOfOrder;
         }
         else if (bucketStart > _currentStartsAt)
         {
@@ -63,7 +107,24 @@ public sealed class TradeClusterAggregator
             _currentStartsAt = bucketStart;
         }
 
+        if (_currentIntervalOverflowed)
+        {
+            _rejectedTradeCount++;
+            return TradeClusterIngestResult.IgnoredOverflowedInterval;
+        }
+
         var price = FloorPrice(trade.Price, _priceStep);
+
+        if (_currentTradeCount == _maximumTradesPerCluster ||
+            (!_currentLevels.ContainsKey(price) &&
+             _currentLevels.Count == _maximumPriceLevelsPerCluster))
+        {
+            _currentIntervalOverflowed = true;
+            _overflowedClusterCount++;
+            _rejectedTradeCount++;
+            _currentLevels.Clear();
+            return TradeClusterIngestResult.CapacityExceeded;
+        }
 
         if (!_currentLevels.TryGetValue(price, out var level))
         {
@@ -79,11 +140,15 @@ public sealed class TradeClusterAggregator
         {
             level.BidVolume += trade.Quantity;
         }
+
+        _currentTradeCount++;
+        _acceptedTradeCount++;
+        return TradeClusterIngestResult.Accepted;
     }
 
     public TradeCluster? CaptureCurrent()
     {
-        if (_currentStartsAt is null)
+        if (_currentStartsAt is null || _currentIntervalOverflowed)
         {
             return null;
         }
@@ -96,6 +161,12 @@ public sealed class TradeClusterAggregator
         _completed.Clear();
         _currentLevels.Clear();
         _currentStartsAt = null;
+        _currentTradeCount = 0;
+        _currentIntervalOverflowed = false;
+        _acceptedTradeCount = 0;
+        _rejectedTradeCount = 0;
+        _ignoredOutOfOrderTradeCount = 0;
+        _overflowedClusterCount = 0;
     }
 
     private void CompleteCurrent()
@@ -105,14 +176,19 @@ public sealed class TradeClusterAggregator
             return;
         }
 
-        _completed.AddLast(CreateCluster(_currentStartsAt.Value));
-
-        while (_completed.Count > _maxCompletedClusters)
+        if (!_currentIntervalOverflowed)
         {
-            _completed.RemoveFirst();
+            _completed.AddLast(CreateCluster(_currentStartsAt.Value));
+
+            while (_completed.Count > _maxCompletedClusters)
+            {
+                _completed.RemoveFirst();
+            }
         }
 
         _currentLevels.Clear();
+        _currentTradeCount = 0;
+        _currentIntervalOverflowed = false;
     }
 
     private TradeCluster CreateCluster(DateTimeOffset startsAt) =>

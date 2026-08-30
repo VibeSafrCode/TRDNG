@@ -35,6 +35,43 @@ public sealed class GateOrderBookSessionTests
             session.Apply(Message(false, 12, 12)));
     }
 
-    private static GateOrderBookMessage Message(bool snapshot, long first, long last) =>
-        new(snapshot, first, new OrderBookUpdate("BTCUSDT", last, last, [], []));
+    [Fact]
+    public void CapacityViolationMarksSessionForResynchronization()
+    {
+        var session = new GateOrderBookSession(new OrderBookEngine(
+            new OrderBookCapacityPolicy(1, 2)));
+        session.Apply(Message(
+            true,
+            10,
+            10,
+            bids: [new(100, 1)],
+            asks: [new(101, 1)]));
+
+        var exception = Assert.Throws<InvalidDataException>(() =>
+            session.Apply(Message(
+                false,
+                11,
+                11,
+                bids: [new(99, 1)])));
+
+        Assert.Contains("ORDER_BOOK_SIDE_CAPACITY_EXCEEDED", exception.Message);
+        Assert.Equal(GateOrderBookSessionState.ResyncRequired, session.State);
+        Assert.False(session.Engine.HasSnapshot);
+    }
+
+    private static GateOrderBookMessage Message(
+        bool snapshot,
+        long first,
+        long last,
+        IReadOnlyList<OrderBookLevel>? bids = null,
+        IReadOnlyList<OrderBookLevel>? asks = null) =>
+        new(
+            snapshot,
+            first,
+            new OrderBookUpdate(
+                "BTCUSDT",
+                last,
+                last,
+                bids ?? [],
+                asks ?? []));
 }

@@ -5,7 +5,8 @@ namespace Trdng.Bybit.MarketData;
 public enum OrderBookSessionState
 {
     WaitingForSnapshot,
-    Live
+    Live,
+    ResyncRequired
 }
 
 public enum OrderBookApplyResult
@@ -13,7 +14,8 @@ public enum OrderBookApplyResult
     SnapshotApplied,
     DeltaApplied,
     IgnoredStaleDelta,
-    WaitingForSnapshot
+    WaitingForSnapshot,
+    ResyncRequired
 }
 
 public sealed class BybitOrderBookSession
@@ -34,22 +36,36 @@ public sealed class BybitOrderBookSession
 
         // Bybit documents u=1 as snapshot data emitted after a service restart.
         // Treat it as a full reset even if a malformed/changed envelope labels it delta.
-        if (message.Type == BybitOrderBookMessageType.Snapshot ||
-            message.Update.UpdateId == 1)
+        try
         {
-            Engine.ApplySnapshot(message.Update);
-            State = OrderBookSessionState.Live;
-            return OrderBookApplyResult.SnapshotApplied;
-        }
+            if (message.Type == BybitOrderBookMessageType.Snapshot ||
+                message.Update.UpdateId == 1)
+            {
+                Engine.ApplySnapshot(message.Update);
+                State = OrderBookSessionState.Live;
+                return OrderBookApplyResult.SnapshotApplied;
+            }
 
-        if (State != OrderBookSessionState.Live)
+            if (State == OrderBookSessionState.ResyncRequired)
+            {
+                return OrderBookApplyResult.ResyncRequired;
+            }
+
+            if (State != OrderBookSessionState.Live)
+            {
+                return OrderBookApplyResult.WaitingForSnapshot;
+            }
+
+            return Engine.TryApplyDelta(message.Update)
+                ? OrderBookApplyResult.DeltaApplied
+                : OrderBookApplyResult.IgnoredStaleDelta;
+        }
+        catch (OrderBookPolicyViolationException)
         {
-            return OrderBookApplyResult.WaitingForSnapshot;
+            Engine.Reset();
+            State = OrderBookSessionState.ResyncRequired;
+            return OrderBookApplyResult.ResyncRequired;
         }
-
-        return Engine.TryApplyDelta(message.Update)
-            ? OrderBookApplyResult.DeltaApplied
-            : OrderBookApplyResult.IgnoredStaleDelta;
     }
 
     public void OnDisconnected()

@@ -12,7 +12,8 @@ public sealed class GatePublicMarketDataClient : IPublicMarketDataClient
     private static readonly Uri Endpoint =
         new("wss://fx-ws.gateio.ws/v4/ws/usdt");
     private readonly CancellationTokenSource _lifetime = new();
-    private readonly GateOrderBookSession _session = new(new OrderBookEngine());
+    private readonly GateOrderBookSession _session = new(new OrderBookEngine(
+        new OrderBookCapacityPolicy(50, 100)));
     private readonly TradeClusterAggregator _clusters;
     private readonly string _contract;
     private readonly decimal _contractMultiplier;

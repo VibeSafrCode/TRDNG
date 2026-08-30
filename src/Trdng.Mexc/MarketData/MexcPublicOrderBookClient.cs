@@ -30,7 +30,11 @@ public sealed class MexcPublicOrderBookClient : IPublicMarketDataClient
         _depth = depth;
         if (maxConnectionAttempts <= 0) throw new ArgumentOutOfRangeException(nameof(maxConnectionAttempts));
         _maxConnectionAttempts = maxConnectionAttempts;
-        _session = new MexcOrderBookSession(new OrderBookEngine(), _symbol);
+        _session = new MexcOrderBookSession(
+            new OrderBookEngine(new OrderBookCapacityPolicy(
+                depth,
+                checked(depth * 2))),
+            _symbol);
     }
 
     public string Venue => "MEXC";

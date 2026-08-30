@@ -110,6 +110,44 @@ public sealed class MexcOrderBookSessionTests
         Assert.Throws<InvalidDataException>(() => session.BufferOrApply(foreign));
     }
 
+    [Fact]
+    public void SnapshotCapacityViolationRequiresResynchronization()
+    {
+        var session = new MexcOrderBookSession(
+            new OrderBookEngine(new OrderBookCapacityPolicy(1, 2)),
+            "APTUSDT");
+        session.BufferOrApply(Delta(11, 11));
+
+        var result = session.ApplySnapshot(Snapshot(
+            10,
+            [new(100, 1), new(99, 1)]));
+
+        Assert.Equal(MexcOrderBookApplyResult.ResyncRequired, result);
+        Assert.Equal(MexcOrderBookSessionState.ResyncRequired, session.State);
+        Assert.False(session.Engine.HasSnapshot);
+        Assert.StartsWith("capacity:ORDER_BOOK_SIDE_CAPACITY_EXCEEDED", session.LastDecision);
+    }
+
+    [Fact]
+    public void BufferedLevelCountIsBoundedBeforeSnapshotArrives()
+    {
+        var session = new MexcOrderBookSession(
+            new OrderBookEngine(new OrderBookCapacityPolicy(10, 10)),
+            "APTUSDT",
+            maxBufferedDeltas: 10,
+            maxBufferedLevels: 2);
+
+        Assert.Equal(
+            MexcOrderBookApplyResult.Buffered,
+            session.BufferOrApply(Delta(1, 1, [new(100, 1), new(99, 1)])));
+        Assert.Equal(
+            MexcOrderBookApplyResult.ResyncRequired,
+            session.BufferOrApply(Delta(2, 2, [new(98, 1)])));
+
+        Assert.Equal(MexcOrderBookSessionState.ResyncRequired, session.State);
+        Assert.Equal("buffer-level-cap:2", session.LastDecision);
+    }
+
     private static MexcOrderBookSession NewSession() => new(new OrderBookEngine(), "APTUSDT");
     private static OrderBookUpdate Snapshot(long version, IReadOnlyList<OrderBookLevel>? bids = null) =>
         new("APTUSDT", version, version, bids ?? [], []);

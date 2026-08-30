@@ -44,6 +44,15 @@ is reset, and the venue session follows its existing reconnect/resynchronization
 path. Raw WebSocket payloads are not included in that error or in MEXC text-frame
 diagnostics.
 
+Normalized order books are bounded by a venue-configured
+`OrderBookCapacityPolicy`. Snapshots validate into replacement state; deltas
+validate their complete change set and projected side counts/cross before any
+mutation. Policy failure never truncates a book: the venue session clears state
+and requires resynchronization. MEXC also bounds the total number of levels held
+before its REST snapshot bridge. Current trade-cluster intervals have independent
+price-level and trade-count caps; an overflowed partial interval is suppressed
+and reported through core metrics.
+
 ## State and lifecycle
 
 - Selection is canonical `asset + product`, generation-scoped and latest-request-wins; old callbacks cannot populate a new selection.
