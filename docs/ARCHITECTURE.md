@@ -44,6 +44,14 @@ is reset, and the venue session follows its existing reconnect/resynchronization
 path. Raw WebSocket payloads are not included in that error or in MEXC text-frame
 diagnostics.
 
+All public REST metadata, catalog and MEXC depth-snapshot responses pass through
+one bounded streaming reader before JSON parsing. It performs a declared-length
+precheck and reads at most one byte beyond an endpoint-specific success cap;
+error bodies and unexpected media types are not parsed or logged. The production
+public client has a five-second timeout with redirects and cookies disabled.
+Current caps are 4 MiB per Bybit instrument page, 8 MiB for Gate contracts and
+MEXC exchange info, and 2/8 MiB for MEXC depth 1,000/5,000 respectively.
+
 Normalized order books are bounded by a venue-configured
 `OrderBookCapacityPolicy`. Snapshots validate into replacement state; deltas
 validate their complete change set and projected side counts/cross before any
@@ -67,3 +75,4 @@ and reported through core metrics.
 - [Stage 1 ledger](stage-1-ledger.md)
 - [Canonical document index](source-of-truth.md)
 - [Security policy](../SECURITY.md)
+- [PR-03 bounded HTTP evidence](pr03-bounded-http-evidence.md)
