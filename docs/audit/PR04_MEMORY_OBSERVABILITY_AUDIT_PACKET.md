@@ -58,3 +58,13 @@ Classify findings P0/P1/P2 and explicitly check:
 Explicit exclusions: visual redesign, production telemetry, credentials,
 private endpoints, `/api/v3/order/test`, order/cancel/withdraw/transfer routes,
 money actions, new venues, tag, notarization and release.
+
+## Superseding acceptance
+
+- Exact commit `8f0eab7` passed pull request `#9` CI run `33302487008`:
+  Release build PASS with 0 warnings/errors and the official deterministic suite
+  327/327 PASS.
+- Pull request `#9` merged to `main` as
+  `2e7d9218c2db462bd0b45ec9f372462b1945cd00`.
+- The 15-minute diagnostic is accepted only as `PASS_15_MIN`; the two-hour
+  release soak and the deferred visual/public-data sprint remain open.

@@ -478,7 +478,7 @@ Baseline зафиксирован: 2026-08-02 11:31 +05:00.
 - GUI/live/private/authenticated/order/money: NOT RUN. PR-04 soak remains
   separate HIGH scope.
 
-## Audit PR-04 memory observability — ACTIVE / LOCAL VERIFICATION
+## Audit PR-04 memory observability — ACCEPTED / MERGED
 
 - Branch `codex/memory-observability-soak`; baseline accepted `main` at
   `8e9c1b9`.
@@ -503,3 +503,7 @@ Baseline зафиксирован: 2026-08-02 11:31 +05:00.
   visible-volume bar scaling with owner-default/customizable colors, BTC default
   and investigation of empty Gate/MEXC books. Current exact soak package is
   unchanged.
+- Implementation/evidence commit `8f0eab7`; pull request `#9`; GitHub CI
+  `33302487008`: Release build PASS, 0 warnings/errors, official suite 327/327
+  PASS. Merged to `main` as
+  `2e7d9218c2db462bd0b45ec9f372462b1945cd00`.

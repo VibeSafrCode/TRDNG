@@ -12,10 +12,10 @@
 | Pre-separation Git bundle | VERIFIED COMPLETE | Full bundle verified before clean recreation |
 | Restore verification | NOT RUN | Recovery artifacts exist; restore procedure not executed |
 | Repository root | VERIFIED | `5780ef66b20143e918e1d88399bfe985b0c1287e` |
-| Current main / origin | VERIFIED | PR-03 merged as `8ba6fbfb2a15ee2a8f9fb2a6d4fbdf4f2991fdf7` |
-| Current working branch | ACTIVE | `codex/memory-observability-soak`; PR-04 remains uncommitted during local verification |
+| Current main / origin | VERIFIED | PR-04 merged as `2e7d9218c2db462bd0b45ec9f372462b1945cd00` |
+| Current working branch | VERIFIED | local `main` fast-forwarded to `origin/main` after PR-04 merge |
 | GitHub publication | VERIFIED PUBLIC | Read-only check 2026-08-30: `PUBLIC`, default branch `main`; no visibility change performed in PR-02 |
-| CI acceptance | VERIFIED | PR-03 final run `33299985960`: Release build PASS; official tests 323/323 PASS |
+| CI acceptance | VERIFIED | PR-04 run `33302487008`: Release build PASS; official tests 327/327 PASS |
 | Older sprint commit IDs | PRE-SEPARATION LOCAL HISTORY | IDs in older evidence documents are preserved by the verified bundle and are not ancestors of the recreated root |
 | Tag / release | NOT RUN | Не разрешены; проверяемых идентификаторов нет |
 
@@ -94,6 +94,9 @@
   was terminated and absence verified.
 - Backup, notarization, tag, release, private/authenticated calls, orders and
   money actions: NOT RUN.
+- Implementation/evidence commit `8f0eab7`; pull request `#9`; final CI
+  `33302487008` PASS with 327/327 official tests. Merged to `main` as
+  `2e7d9218c2db462bd0b45ec9f372462b1945cd00`.
 
 ## Формат backup-записи
 

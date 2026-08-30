@@ -169,7 +169,7 @@ with 323/323 official tests. Pull request `#8` merged as
 [`pr03-bounded-http-evidence.md`](pr03-bounded-http-evidence.md). PR-04 memory
 soak remains a separate HIGH sprint.
 
-## Audit PR-04 status — active / local verification
+## Audit PR-04 status — accepted / merged
 
 The bounded memory-observability layer and credential-free deterministic replay
 are implemented on `codex/memory-observability-soak`. A one-million-cycle replay
@@ -178,6 +178,8 @@ passed. The real signed app completed 15 minutes 40 seconds with final RSS
 74,224 KiB and peak physical footprint 220,843,136 bytes: `PASS_15_MIN`. This
 cannot establish the later two-hour release gate. Evidence:
 [`pr04-memory-soak-evidence.md`](pr04-memory-soak-evidence.md).
+GitHub CI `33302487008` passed the Release build and 327/327 tests; pull request
+`#9` merged as `2e7d9218c2db462bd0b45ec9f372462b1945cd00`.
 
 The next product sprint, not part of PR-04, must address the owner's manual
 large-monitor review: adaptive full-height venue books, per-book gear and

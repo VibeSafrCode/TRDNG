@@ -113,3 +113,16 @@ change this exact package during the soak:
 - `OPEN`: two-hour public-data release soak, GUI responsiveness, reconnect and
   market-switch coverage remain a later release gate.
 - `OPEN`: backup, notarization, tag and release were not run.
+
+## Publication acceptance
+
+- Implementation/evidence commit: `8f0eab7`.
+- Pull request [#9](https://github.com/VibeSafrCode/TRDNG/pull/9) passed GitHub
+  CI [33302487008](https://github.com/VibeSafrCode/TRDNG/actions/runs/33302487008):
+  Release build PASS with 0 warnings/errors; official deterministic suite
+  327/327 PASS, 0 failed, 0 skipped.
+- PR merged to `main` as
+  `2e7d9218c2db462bd0b45ec9f372462b1945cd00`.
+- GitHub emitted a non-blocking Node runtime deprecation annotation for the
+  pinned official Actions. This remains supply-chain maintenance debt.
+- Tag, notarization, production release and two-hour soak remain `NOT RUN`.
