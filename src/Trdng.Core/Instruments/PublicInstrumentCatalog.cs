@@ -24,7 +24,10 @@ public sealed class PublicInstrumentCatalog
                 entry.VenueSymbol.Any(char.IsWhiteSpace) ||
                 (entry.TickSize is not null && entry.TickSize <= 0) ||
                 (entry.QuantityMultiplier is not null && entry.QuantityMultiplier <= 0) ||
-                (entry.Venue is TradingVenue.Bybit or TradingVenue.Gate && entry.TickSize is null))
+                ((entry.Venue is TradingVenue.Bybit or TradingVenue.Gate ||
+                  entry.Venue == TradingVenue.Mexc &&
+                  entry.Instrument.Product == MarketProduct.Perpetual) &&
+                 entry.TickSize is null))
                 throw new InvalidDataException("Public catalog entry is invalid.");
             var key = (entry.Instrument, entry.Venue);
             if (!next.TryAdd(key, entry) && next[key] != entry)
@@ -54,6 +57,11 @@ public sealed class PublicInstrumentCatalog
             ? entry : null;
     }
 
+    public IReadOnlyList<PublicCatalogEntry> Snapshot()
+    {
+        lock (_sync) return _entries.Values.ToArray();
+    }
+
     public IReadOnlyList<CanonicalInstrument> Search(MarketProduct product, string query,
         int limit = MaxSearchResults)
     {
@@ -79,6 +87,83 @@ public static class PublicCatalogFreshness
 {
     public static bool IsFresh(DateTimeOffset? loadedAt, DateTimeOffset now, TimeSpan maxAge) =>
         maxAge > TimeSpan.Zero && loadedAt is { } loaded && now >= loaded && now - loaded <= maxAge;
+}
+
+public enum PublicCatalogRefreshDecision
+{
+    Replace,
+    RetainFresh,
+    RetainStale
+}
+
+public enum PublicCatalogReconciliationAction
+{
+    None,
+    Bootstrap,
+    RebuildActive,
+    FailClosedActive
+}
+
+public static class PublicCatalogReconciliationPolicy
+{
+    public static PublicCatalogReconciliationAction Decide(
+        bool initialLoad,
+        CanonicalInstrument? active,
+        IReadOnlyList<PublicCatalogEntry?> previous,
+        IReadOnlyList<PublicCatalogEntry?> current)
+    {
+        ArgumentNullException.ThrowIfNull(previous);
+        ArgumentNullException.ThrowIfNull(current);
+        if (previous.Count != current.Count)
+            throw new ArgumentException("Catalog mappings must have equal lengths.");
+        if (active is null)
+            return initialLoad
+                ? PublicCatalogReconciliationAction.None
+                : PublicCatalogReconciliationAction.Bootstrap;
+        if (previous.SequenceEqual(current))
+            return PublicCatalogReconciliationAction.None;
+        return current.All(entry => entry is null)
+            ? PublicCatalogReconciliationAction.FailClosedActive
+            : PublicCatalogReconciliationAction.RebuildActive;
+    }
+}
+
+public static class PublicCatalogRefreshPolicy
+{
+    public static bool ShouldRefresh(
+        DateTimeOffset? loadedAt,
+        DateTimeOffset now,
+        TimeSpan refreshAfter)
+    {
+        if (refreshAfter <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(refreshAfter));
+        return loadedAt is not { } loaded || now < loaded || now - loaded >= refreshAfter;
+    }
+
+    public static PublicCatalogRefreshDecision Decide(
+        DateTimeOffset? loadedAt,
+        DateTimeOffset now,
+        TimeSpan maxAge,
+        IReadOnlyList<VenueCatalogLoadResult> results,
+        int expectedSourceCount,
+        int candidateEntryCount)
+    {
+        ArgumentNullException.ThrowIfNull(results);
+        if (maxAge <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(maxAge));
+        if (expectedSourceCount <= 0)
+            throw new ArgumentOutOfRangeException(nameof(expectedSourceCount));
+        if (candidateEntryCount < 0)
+            throw new ArgumentOutOfRangeException(nameof(candidateEntryCount));
+        if (loadedAt is null && candidateEntryCount > 0)
+            return PublicCatalogRefreshDecision.Replace;
+        if (results.Count == expectedSourceCount &&
+            results.All(result => result.Succeeded && result.Entries.Count != 0))
+            return PublicCatalogRefreshDecision.Replace;
+        return PublicCatalogFreshness.IsFresh(loadedAt, now, maxAge)
+            ? PublicCatalogRefreshDecision.RetainFresh
+            : PublicCatalogRefreshDecision.RetainStale;
+    }
 }
 
 public static class CatalogPresentationPolicy
@@ -148,9 +233,9 @@ public static class CatalogSelectionPolicy
 {
     public static CanonicalInstrument? ChooseInitial(PublicInstrumentCatalog catalog)
     {
-        var apt = new CanonicalInstrument("APT", "USDT", MarketProduct.Perpetual);
-        if (catalog.Find(apt, TradingVenue.Bybit) is not null ||
-            catalog.Find(apt, TradingVenue.Gate) is not null) return apt;
+        var bitcoin = new CanonicalInstrument("BTC", "USDT", MarketProduct.Perpetual);
+        if (catalog.Find(bitcoin, TradingVenue.Bybit) is not null ||
+            catalog.Find(bitcoin, TradingVenue.Gate) is not null) return bitcoin;
         return catalog.Search(MarketProduct.Perpetual, string.Empty, 1).FirstOrDefaultNullable()
             ?? catalog.Search(MarketProduct.Spot, string.Empty, 1).FirstOrDefaultNullable();
     }
@@ -160,8 +245,8 @@ public static class CatalogSelectionPolicy
     {
         var same = new CanonicalInstrument(current.BaseAsset, current.QuoteAsset, target);
         if (HasMarket(catalog, same)) return same;
-        var apt = new CanonicalInstrument("APT", "USDT", target);
-        if (HasMarket(catalog, apt)) return apt;
+        var bitcoin = new CanonicalInstrument("BTC", "USDT", target);
+        if (HasMarket(catalog, bitcoin)) return bitcoin;
         return catalog.Search(target, string.Empty, 1).FirstOrDefaultNullable();
     }
 

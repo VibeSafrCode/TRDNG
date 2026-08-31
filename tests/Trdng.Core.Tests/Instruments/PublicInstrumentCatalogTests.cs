@@ -76,6 +76,20 @@ public sealed class PublicInstrumentCatalogTests
     }
 
     [Fact]
+    public void GateCatalogKeepsValidPairsWhenAnotherEntryCannotBeRepresented()
+    {
+        var result = GateInstrumentMetadataClient.ParseCatalogResult(
+            Encoding.UTF8.GetBytes("""
+              [{"name":"BTC_USDT","order_price_round":"0.1","quanto_multiplier":"0.0001","in_delisting":false},
+               {"name":"BAD_BASE_USDT","order_price_round":"0.1","quanto_multiplier":"1","in_delisting":false}]
+              """));
+
+        var entry = Assert.Single(result.Entries);
+        Assert.Equal("BTC_USDT", entry.VenueSymbol);
+        Assert.Equal(1, result.RejectedCount);
+    }
+
+    [Fact]
     public void ValidationAllowsMexcWithoutTickButRejectsBadOptionalMultiplier()
     {
         var catalog = new PublicInstrumentCatalog();
@@ -87,6 +101,29 @@ public sealed class PublicInstrumentCatalogTests
         Assert.Throws<InvalidDataException>(() => catalog.Replace([
             new(new("SOL", "USDT", MarketProduct.Perpetual), TradingVenue.Bybit,
                 "SOLUSDT", null)]));
+        Assert.Throws<InvalidDataException>(() => catalog.Replace([
+            new(new("SOL", "USDT", MarketProduct.Perpetual), TradingVenue.Mexc,
+                "SOL_USDT", null, 1m)]));
+    }
+
+    [Fact]
+    public void MexcContractCatalogUsesOfficialPriceAndContractUnits()
+    {
+        var result = MexcContractInstrumentMetadataClient.ParseCatalogResult(
+            Encoding.UTF8.GetBytes("""
+              {"success":true,"code":0,"data":[
+              {"symbol":"BTC_USDT","baseCoin":"BTC","quoteCoin":"USDT","settleCoin":"USDT","state":0,"contractSize":"0.0001","priceUnit":"0.5"},
+              {"symbol":"OLD_USDT","baseCoin":"OLD","quoteCoin":"USDT","settleCoin":"USDT","state":3,"contractSize":"1","priceUnit":"0.01"},
+              {"symbol":"BAD_USDT","baseCoin":"$BAD","quoteCoin":"USDT","settleCoin":"USDT","state":0,"contractSize":"1","priceUnit":"0.01"}]}
+              """));
+
+        var entry = Assert.Single(result.Entries);
+        Assert.Equal(new CanonicalInstrument("BTC", "USDT", MarketProduct.Perpetual),
+            entry.Instrument);
+        Assert.Equal("BTC_USDT", entry.VenueSymbol);
+        Assert.Equal(0.5m, entry.TickSize);
+        Assert.Equal(0.0001m, entry.QuantityMultiplier);
+        Assert.Equal(1, result.InvalidEligibleCount);
     }
 
     [Fact]
@@ -106,6 +143,99 @@ public sealed class PublicInstrumentCatalogTests
             new("APT", "USDT", MarketProduct.Perpetual), MarketProduct.Spot));
         Assert.Null(CatalogSelectionPolicy.ChooseForProduct(catalog, spot,
             MarketProduct.Perpetual));
+    }
+
+    [Fact]
+    public void RefreshTimingAndReplacementAreBoundedAndFailClosed()
+    {
+        var now = DateTimeOffset.UnixEpoch + TimeSpan.FromHours(2);
+        var loaded = now - TimeSpan.FromMinutes(10);
+        var instrument = new CanonicalInstrument("BTC", "USDT", MarketProduct.Perpetual);
+        VenueCatalogLoadResult Success(TradingVenue venue) => new(
+            venue,
+            [new(instrument, venue, venue == TradingVenue.Gate ? "BTC_USDT" : "BTCUSDT",
+                0.1m)],
+            null);
+
+        Assert.False(PublicCatalogRefreshPolicy.ShouldRefresh(
+            now - TimeSpan.FromMinutes(9), now, TimeSpan.FromMinutes(10)));
+        Assert.True(PublicCatalogRefreshPolicy.ShouldRefresh(
+            loaded, now, TimeSpan.FromMinutes(10)));
+        Assert.True(PublicCatalogRefreshPolicy.ShouldRefresh(
+            now + TimeSpan.FromSeconds(1), now, TimeSpan.FromMinutes(10)));
+
+        var complete = new[]
+        {
+            Success(TradingVenue.Mexc),
+            Success(TradingVenue.Mexc),
+            Success(TradingVenue.Gate),
+            Success(TradingVenue.Bybit)
+        };
+        Assert.Equal(PublicCatalogRefreshDecision.Replace,
+            PublicCatalogRefreshPolicy.Decide(loaded, now, TimeSpan.FromMinutes(15),
+                complete, 4, complete.Sum(result => result.Entries.Count)));
+
+        var incomplete = complete[..3];
+        Assert.Equal(PublicCatalogRefreshDecision.RetainFresh,
+            PublicCatalogRefreshPolicy.Decide(now - TimeSpan.FromMinutes(14), now,
+                TimeSpan.FromMinutes(15), incomplete, 4,
+                incomplete.Sum(result => result.Entries.Count)));
+        Assert.Equal(PublicCatalogRefreshDecision.RetainStale,
+            PublicCatalogRefreshPolicy.Decide(now - TimeSpan.FromMinutes(16), now,
+                TimeSpan.FromMinutes(15), incomplete, 4,
+                incomplete.Sum(result => result.Entries.Count)));
+        Assert.Equal(PublicCatalogRefreshDecision.Replace,
+            PublicCatalogRefreshPolicy.Decide(null, now,
+                TimeSpan.FromMinutes(15), incomplete, 4,
+                incomplete.Sum(result => result.Entries.Count)));
+        Assert.Equal(PublicCatalogRefreshDecision.RetainStale,
+            PublicCatalogRefreshPolicy.Decide(null, now,
+                TimeSpan.FromMinutes(15), [], 4, 0));
+    }
+
+    [Fact]
+    public void StartupAndProductFallbackPreferBitcoinWhenAvailable()
+    {
+        var catalog = new PublicInstrumentCatalog();
+        var apt = new CanonicalInstrument("APT", "USDT", MarketProduct.Perpetual);
+        var btcPerpetual = new CanonicalInstrument("BTC", "USDT", MarketProduct.Perpetual);
+        var btcSpot = new CanonicalInstrument("BTC", "USDT", MarketProduct.Spot);
+        catalog.Replace([
+            new(apt, TradingVenue.Bybit, "APTUSDT", 0.0001m),
+            new(btcPerpetual, TradingVenue.Bybit, "BTCUSDT", 0.1m),
+            new(btcSpot, TradingVenue.Mexc, "BTCUSDT", null)]);
+
+        Assert.Equal(btcPerpetual, CatalogSelectionPolicy.ChooseInitial(catalog));
+        Assert.Equal(btcSpot, CatalogSelectionPolicy.ChooseForProduct(
+            catalog, apt, MarketProduct.Spot));
+    }
+
+    [Fact]
+    public void ReconciliationBootstrapsRebuildsOrFailsClosedExactly()
+    {
+        var instrument = new CanonicalInstrument("BTC", "USDT", MarketProduct.Perpetual);
+        var oldEntry = new PublicCatalogEntry(
+            instrument, TradingVenue.Bybit, "BTCUSDT", 0.1m);
+        var newEntry = oldEntry with { TickSize = 0.01m };
+        PublicCatalogEntry?[] empty = [null, null, null];
+
+        Assert.Equal(PublicCatalogReconciliationAction.None,
+            PublicCatalogReconciliationPolicy.Decide(
+                initialLoad: true, active: null, empty, empty));
+        Assert.Equal(PublicCatalogReconciliationAction.Bootstrap,
+            PublicCatalogReconciliationPolicy.Decide(
+                initialLoad: false, active: null, empty, [newEntry, null, null]));
+        Assert.Equal(PublicCatalogReconciliationAction.None,
+            PublicCatalogReconciliationPolicy.Decide(
+                initialLoad: false, instrument, [oldEntry, null, null],
+                [oldEntry, null, null]));
+        Assert.Equal(PublicCatalogReconciliationAction.RebuildActive,
+            PublicCatalogReconciliationPolicy.Decide(
+                initialLoad: false, instrument, [oldEntry, null, null],
+                [newEntry, null, null]));
+        Assert.Equal(PublicCatalogReconciliationAction.FailClosedActive,
+            PublicCatalogReconciliationPolicy.Decide(
+                initialLoad: false, instrument, [oldEntry, null, null], empty));
     }
 
     [Fact]

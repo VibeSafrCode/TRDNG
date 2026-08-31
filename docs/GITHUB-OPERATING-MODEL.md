@@ -2,7 +2,9 @@
 
 ## Initial posture
 
-The owner selected a **private** repository and no license. The previous remote
+The owner initially selected a **private** repository and no license. The
+repository is currently **public** by later explicit Founder decision; no
+license has been added. The previous remote
 was deleted and the terminal-only repository was recreated cleanly at
 `https://github.com/VibeSafrCode/TRDNG`. Its root is
 `5780ef66b20143e918e1d88399bfe985b0c1287e`; the accepted portable-test fix is
@@ -10,13 +12,16 @@ was deleted and the terminal-only repository was recreated cleanly at
 pending. Fresh-clone path/content scans and CI are accepted.
 
 A 12 MiB external local archive and verified complete pre-separation Git bundle
-preserve recovery evidence. Restore remains NOT RUN. Keep secret scanning, push
-protection, Dependabot alerts and updates enabled on the private remote.
+preserve historical recovery evidence. An isolated restore from that historical
+bundle passed on 2026-08-31, but it does not recover current terminal-only
+history; the current bundle gate and separate directory-archive restore remain
+open. Keep secret
+scanning, push protection, Dependabot alerts and updates enabled on the remote.
 
 Protect `main` with pull requests, required CI, conversation resolution, no
 force-push and no deletion. Independent audit is mandatory. Require a GitHub PR
 approval when a distinct reviewer/collaborator identity exists. For a solo
-private repository where self-approval is impossible, the owner may use a
+repository where self-approval is impossible, the owner may use a
 documented audited exception after recording the independent audit evidence;
 this is per-change, not a permanent administrator bypass. Use
 `codex/<short-topic>` branches. Do not add `CODEOWNERS` until the correct GitHub
@@ -45,7 +50,8 @@ Evidence states what ran, outcome, artifact/hash and `NOT RUN` debt. Backups req
 ## Supply chain
 
 CI has `contents: read`, no secrets, no artifact publication and no release
-permissions. Official `actions/checkout` and `actions/setup-dotnet` are pinned to
-full commit SHAs independently verified from their official repositories on
-2026-08-19. Dependabot continues to monitor `github-actions` for reviewed update
-proposals.
+permissions. Official `actions/checkout` is pinned to a reviewed full commit
+SHA. The closure workflow uses the repository SDK inside a digest-pinned .NET
+container instead of setup-dotnet, and fails closed when Docker or the required
+cgroup limits are unavailable. Dependabot continues to monitor `github-actions`
+for reviewed update proposals.

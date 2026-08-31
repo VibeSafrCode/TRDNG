@@ -33,5 +33,5 @@ public static class VenueCardLayout
     private static bool IsImplemented(TradingVenue venue, MarketProduct product) =>
         product == MarketProduct.Spot
             ? venue == TradingVenue.Mexc
-            : venue is TradingVenue.Gate or TradingVenue.Bybit;
+            : venue is TradingVenue.Mexc or TradingVenue.Gate or TradingVenue.Bybit;
 }

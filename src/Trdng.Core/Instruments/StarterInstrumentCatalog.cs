@@ -41,7 +41,7 @@ public static class StarterInstrumentCatalog
                     CapabilityAvailability.Available,
                     CapabilityAvailability.NotImplemented),
                 new(perpetual, TradingVenue.Mexc, $"{baseAsset}_USDT",
-                    CapabilityAvailability.NotImplemented,
+                    CapabilityAvailability.Available,
                     CapabilityAvailability.Blocked),
 
                 // Existing application adapters currently stream perpetual books.

@@ -21,14 +21,38 @@ jobs:
       TRDNG_LIVE_TESTS: "0"
     steps:
       - name: Check out source
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - name: Install .NET from global.json
-        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
-        with:
-          global-json-file: global.json
-      - name: Restore
-        run: dotnet restore Trdng.slnx
-      - name: Build
-        run: dotnet build Trdng.slnx --configuration Release --no-restore
-      - name: Test deterministic suite
-        run: dotnet test tests/Trdng.Core.Tests/Trdng.Core.Tests.csproj --configuration Release --no-build --no-restore
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Require Docker memory envelope
+        run: docker info >/dev/null
+      - name: Restore, build, test and bounded replay without swap
+        run: |
+          mkdir -p "$RUNNER_TEMP/trdng-ci-cache"
+          docker run --rm \
+            --memory=2g --memory-swap=2g --pids-limit=512 --cpus=2 \
+            --user "$(id -u):$(id -g)" \
+            --env HOME=/ci-cache/home \
+            --env DOTNET_CLI_HOME=/ci-cache/dotnet \
+            --env NUGET_PACKAGES=/ci-cache/nuget \
+            --env AVALONIA_TELEMETRY_OPTOUT=1 \
+            --env TRDNG_LIVE_TESTS=0 \
+            --tmpfs /tmp:rw,size=1g \
+            --volume "$RUNNER_TEMP/trdng-ci-cache:/ci-cache" \
+            --volume "$GITHUB_WORKSPACE:/workspace" \
+            --workdir /workspace \
+            mcr.microsoft.com/dotnet/sdk:10.0.302@sha256:72dd743782f2ae7e5476fd64f6a460045e3998dc862218b80e6944cba79a01b0 \
+            /bin/bash -lc '
+              set -euo pipefail
+              test -r /sys/fs/cgroup/memory.swap.max
+              test "$(cat /sys/fs/cgroup/memory.swap.max)" = "0"
+              dotnet restore Trdng.slnx
+              dotnet build Trdng.slnx --configuration Release --no-restore
+              timeout --signal=TERM --kill-after=15s 5m \
+                dotnet test tests/Trdng.Core.Tests/Trdng.Core.Tests.csproj \
+                  --configuration Release --no-build --no-restore \
+                  --blame-hang-timeout 2m
+              timeout --signal=TERM --kill-after=15s 2m \
+                dotnet run --project tools/Trdng.MemorySoak/Trdng.MemorySoak.csproj \
+                  --configuration Release --no-build --no-restore -- \
+                  --cycles 1000000 --switch-every 1000 \
+                  --sample-every 100000 --book-depth 256
+            '
