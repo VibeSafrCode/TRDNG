@@ -26,15 +26,17 @@ jobs:
         run: docker info >/dev/null
       - name: Restore, build, test and bounded replay without swap
         run: |
+          mkdir -p "$RUNNER_TEMP/trdng-ci-cache"
           docker run --rm \
             --memory=2g --memory-swap=2g --pids-limit=512 --cpus=2 \
             --user "$(id -u):$(id -g)" \
-            --env HOME=/tmp/home \
-            --env DOTNET_CLI_HOME=/tmp/dotnet \
-            --env NUGET_PACKAGES=/tmp/nuget \
+            --env HOME=/ci-cache/home \
+            --env DOTNET_CLI_HOME=/ci-cache/dotnet \
+            --env NUGET_PACKAGES=/ci-cache/nuget \
             --env AVALONIA_TELEMETRY_OPTOUT=1 \
             --env TRDNG_LIVE_TESTS=0 \
             --tmpfs /tmp:rw,size=1g \
+            --volume "$RUNNER_TEMP/trdng-ci-cache:/ci-cache" \
             --volume "$GITHUB_WORKSPACE:/workspace" \
             --workdir /workspace \
             mcr.microsoft.com/dotnet/sdk:10.0.302@sha256:72dd743782f2ae7e5476fd64f6a460045e3998dc862218b80e6944cba79a01b0 \
