@@ -49,7 +49,7 @@ public static class BookDisplayPolicy
     public const decimal MaximumManualVolumeReference = 1_000_000_000_000m;
     public const double TargetRowHeight = 18;
     public const double HorizontalContentMargin = 20;
-    public const double SpreadSafetyMarginPerSide = 4;
+    public const double SpreadSafetyMarginPerSide = 12;
 
     public static BookDisplayLayout Resolve(
         bool automaticDepth,

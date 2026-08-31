@@ -113,7 +113,28 @@ public partial class MainWindow : Window
     private void OpenBookSettings_Click(object? sender,
         Avalonia.Interactivity.RoutedEventArgs e)
     {
-        if (sender is Button { Flyout: { } flyout } button)
-            flyout.ShowAt(button);
+        if (sender is not Control { Tag: string venueName } ||
+            !Enum.TryParse<TradingVenue>(venueName, true, out var venue) ||
+            ViewModel is not { } viewModel) return;
+
+        BookSettingsContent.Content = venue switch
+        {
+            TradingVenue.Mexc => viewModel.MexcBookSettings,
+            TradingVenue.Gate => viewModel.GateBookSettings,
+            TradingVenue.Bybit => viewModel.BybitBookSettings,
+            _ => null
+        };
+        if (BookSettingsContent.Content is null) return;
+        BookSettingsBackdrop.IsVisible = true;
+        BookSettingsOverlay.IsVisible = true;
     }
+
+    private void CloseBookSettings_Click(object? sender,
+        Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        BookSettingsOverlay.IsVisible = false;
+        BookSettingsBackdrop.IsVisible = false;
+        BookSettingsContent.Content = null;
+    }
+
 }

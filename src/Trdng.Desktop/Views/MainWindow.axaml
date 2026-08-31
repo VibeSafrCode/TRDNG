@@ -252,7 +252,7 @@
           <Grid Grid.Row="1">
             <TextBlock Text="{Binding MexcEmptyState}" Foreground="#656D79" FontSize="11" TextWrapping="Wrap" Margin="20" HorizontalAlignment="Center" VerticalAlignment="Center" />
             <ItemsControl ItemsSource="{Binding MexcAsks}" ItemTemplate="{StaticResource AskRow}"
-                          VerticalAlignment="Bottom" ClipToBounds="True" Margin="0,0,0,4" />
+                          VerticalAlignment="Bottom" ClipToBounds="True" Margin="0,0,0,12" />
           </Grid>
           <Border Grid.Row="2" Background="#171A20" BorderBrush="#242830" BorderThickness="0,1">
             <Grid Margin="10,0" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
@@ -260,15 +260,14 @@
                 <TextBlock Text="{Binding MexcSpread, StringFormat='Спред {0}'}" Foreground="#8B93A1" />
                 <TextBlock Text="{Binding MexcBookSettings.DepthLabel}" Foreground="#656D79" FontSize="9" />
               </StackPanel>
-              <Button Grid.Column="1" Content="⚙" Padding="7,2" ToolTip.Tip="Настройки MEXC"
-                      Click="OpenBookSettings_Click">
-                <Button.Flyout><Flyout Placement="Top"><ContentControl Content="{Binding MexcBookSettings}" ContentTemplate="{StaticResource BookSettingsPanel}" /></Flyout></Button.Flyout>
-              </Button>
+              <Button Grid.Column="1" Content="⚙" Padding="7,2"
+                      ToolTip.Tip="Настройки MEXC" Tag="Mexc"
+                      Click="OpenBookSettings_Click" />
               <TextBlock Grid.Column="2" Text="{Binding MexcLastPrice}" FontWeight="SemiBold" VerticalAlignment="Center" />
             </Grid>
           </Border>
           <ItemsControl Grid.Row="3" ItemsSource="{Binding MexcBids}" ItemTemplate="{StaticResource BidRow}"
-                        ClipToBounds="True" Margin="0,4,0,0" />
+                        ClipToBounds="True" Margin="0,12,0,0" />
         </Grid>
       </Border>
 
@@ -277,21 +276,20 @@
               SizeChanged="BookViewport_SizeChanged"
               PointerWheelChanged="BookViewport_PointerWheelChanged">
           <Grid Margin="10,0" ColumnDefinitions="*,Auto"><TextBlock Text="{Binding GateCardTitle}" FontWeight="SemiBold" VerticalAlignment="Center" /><TextBlock Grid.Column="1" Text="{Binding GateConnectionStatus}" Foreground="#8B93A1" FontSize="10" VerticalAlignment="Center" /></Grid>
-          <Grid Grid.Row="1"><TextBlock Text="{Binding GateEmptyState}" Foreground="#656D79" FontSize="11" TextWrapping="Wrap" Margin="20" HorizontalAlignment="Center" VerticalAlignment="Center" /><ItemsControl ItemsSource="{Binding GateAsks}" ItemTemplate="{StaticResource AskRow}" VerticalAlignment="Bottom" ClipToBounds="True" Margin="0,0,0,4" /></Grid>
+          <Grid Grid.Row="1"><TextBlock Text="{Binding GateEmptyState}" Foreground="#656D79" FontSize="11" TextWrapping="Wrap" Margin="20" HorizontalAlignment="Center" VerticalAlignment="Center" /><ItemsControl ItemsSource="{Binding GateAsks}" ItemTemplate="{StaticResource AskRow}" VerticalAlignment="Bottom" ClipToBounds="True" Margin="0,0,0,12" /></Grid>
           <Border Grid.Row="2" Background="#171A20" BorderBrush="#242830" BorderThickness="0,1">
             <Grid Margin="10,0" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
               <StackPanel VerticalAlignment="Center">
                 <TextBlock Text="{Binding GateSpread, StringFormat='Спред {0}'}" Foreground="#8B93A1" />
                 <TextBlock Text="{Binding GateBookSettings.DepthLabel}" Foreground="#656D79" FontSize="9" />
               </StackPanel>
-              <Button Grid.Column="1" Content="⚙" Padding="7,2" ToolTip.Tip="Настройки Gate"
-                      Click="OpenBookSettings_Click">
-                <Button.Flyout><Flyout Placement="Top"><ContentControl Content="{Binding GateBookSettings}" ContentTemplate="{StaticResource BookSettingsPanel}" /></Flyout></Button.Flyout>
-              </Button>
+              <Button Grid.Column="1" Content="⚙" Padding="7,2"
+                      ToolTip.Tip="Настройки Gate" Tag="Gate"
+                      Click="OpenBookSettings_Click" />
               <TextBlock Grid.Column="2" Text="{Binding GateLastPrice}" FontWeight="SemiBold" VerticalAlignment="Center" />
             </Grid>
           </Border>
-          <ItemsControl Grid.Row="3" ItemsSource="{Binding GateBids}" ItemTemplate="{StaticResource BidRow}" ClipToBounds="True" Margin="0,4,0,0" />
+          <ItemsControl Grid.Row="3" ItemsSource="{Binding GateBids}" ItemTemplate="{StaticResource BidRow}" ClipToBounds="True" Margin="0,12,0,0" />
         </Grid>
       </Border>
 
@@ -300,24 +298,43 @@
               SizeChanged="BookViewport_SizeChanged"
               PointerWheelChanged="BookViewport_PointerWheelChanged">
           <Grid Margin="10,0" ColumnDefinitions="*,Auto"><TextBlock Text="{Binding BybitCardTitle}" FontWeight="SemiBold" VerticalAlignment="Center" /><TextBlock Grid.Column="1" Text="{Binding ConnectionStatus}" Foreground="#8B93A1" FontSize="10" VerticalAlignment="Center" /></Grid>
-          <Grid Grid.Row="1"><TextBlock Text="{Binding BybitEmptyState}" Foreground="#656D79" FontSize="11" TextWrapping="Wrap" Margin="20" HorizontalAlignment="Center" VerticalAlignment="Center" /><ItemsControl ItemsSource="{Binding Asks}" ItemTemplate="{StaticResource AskRow}" VerticalAlignment="Bottom" ClipToBounds="True" Margin="0,0,0,4" /></Grid>
+          <Grid Grid.Row="1"><TextBlock Text="{Binding BybitEmptyState}" Foreground="#656D79" FontSize="11" TextWrapping="Wrap" Margin="20" HorizontalAlignment="Center" VerticalAlignment="Center" /><ItemsControl ItemsSource="{Binding Asks}" ItemTemplate="{StaticResource AskRow}" VerticalAlignment="Bottom" ClipToBounds="True" Margin="0,0,0,12" /></Grid>
           <Border Grid.Row="2" Background="#171A20" BorderBrush="#242830" BorderThickness="0,1">
             <Grid Margin="10,0" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
               <StackPanel VerticalAlignment="Center">
                 <TextBlock Text="{Binding Spread, StringFormat='Спред {0}'}" Foreground="#8B93A1" />
                 <TextBlock Text="{Binding BybitBookSettings.DepthLabel}" Foreground="#656D79" FontSize="9" />
               </StackPanel>
-              <Button Grid.Column="1" Content="⚙" Padding="7,2" ToolTip.Tip="Настройки Bybit"
-                      Click="OpenBookSettings_Click">
-                <Button.Flyout><Flyout Placement="Top"><ContentControl Content="{Binding BybitBookSettings}" ContentTemplate="{StaticResource BookSettingsPanel}" /></Flyout></Button.Flyout>
-              </Button>
+              <Button Grid.Column="1" Content="⚙" Padding="7,2"
+                      ToolTip.Tip="Настройки Bybit" Tag="Bybit"
+                      Click="OpenBookSettings_Click" />
               <TextBlock Grid.Column="2" Text="{Binding LastPrice}" FontWeight="SemiBold" VerticalAlignment="Center" />
             </Grid>
           </Border>
-          <ItemsControl Grid.Row="3" ItemsSource="{Binding Bids}" ItemTemplate="{StaticResource BidRow}" ClipToBounds="True" Margin="0,4,0,0" />
+          <ItemsControl Grid.Row="3" ItemsSource="{Binding Bids}" ItemTemplate="{StaticResource BidRow}" ClipToBounds="True" Margin="0,12,0,0" />
         </Grid>
       </Border>
     </Grid>
+
+    <Border x:Name="BookSettingsBackdrop" Grid.Row="1"
+            Background="#B0000000" IsVisible="False" />
+    <Border x:Name="BookSettingsOverlay" Grid.Row="1"
+            Width="330" MaxHeight="560" HorizontalAlignment="Center"
+            VerticalAlignment="Center" Background="#15181D"
+            BorderBrush="#3A414D" BorderThickness="1" CornerRadius="10"
+            Padding="12" IsVisible="False">
+      <Grid RowDefinitions="Auto,*">
+        <Grid ColumnDefinitions="*,Auto" Margin="4,0,4,8">
+          <TextBlock Text="НАСТРОЙКИ СТАКАНА" FontWeight="Bold"
+                     VerticalAlignment="Center" />
+          <Button Grid.Column="1" Content="✕" Padding="8,3"
+                  ToolTip.Tip="Закрыть настройки"
+                  Click="CloseBookSettings_Click" />
+        </Grid>
+        <ContentControl x:Name="BookSettingsContent" Grid.Row="1"
+                        ContentTemplate="{StaticResource BookSettingsPanel}" />
+      </Grid>
+    </Border>
 
     <Border Grid.Row="2" BorderBrush="#242830" BorderThickness="0,1,0,0">
       <Grid Margin="16,0" ColumnDefinitions="*,Auto">
