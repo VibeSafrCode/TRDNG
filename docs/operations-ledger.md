@@ -11,10 +11,10 @@
 | External archive | VERIFIED | 12 MiB; directory comparison PASS |
 | Pre-separation Git bundle | VERIFIED COMPLETE | Full bundle verified before clean recreation |
 | Historical restore verification | VERIFIED | Pre-separation bundle cloned in isolation; full strict fsck, exact historical HEAD and clean worktree PASS on 2026-08-31 |
-| Current terminal restore verification | PENDING | Must cover the accepted closure implementation commit; historical bundle is not sufficient |
+| Current terminal restore verification | VERIFIED | Bundle for `fb252bfa0afda8f57d51202d74baeb29e8954d79`; verify, isolated clone, strict fsck, exact HEAD and clean worktree PASS |
 | Repository root | VERIFIED | `5780ef66b20143e918e1d88399bfe985b0c1287e` |
 | Current main / origin | VERIFIED | PR-04 merged as `2e7d9218c2db462bd0b45ec9f372462b1945cd00` |
-| Current working branch | VERIFIED WIP | `codex/adaptive-orderbooks`; closure implementation is not yet committed |
+| Current working branch | VERIFIED | `codex/adaptive-orderbooks`; closure implementation commit `fb252bfa0afda8f57d51202d74baeb29e8954d79` |
 | GitHub publication | VERIFIED PUBLIC | Read-only check 2026-08-31: `PUBLIC`, default branch `main`; no visibility change performed in this closure |
 | CI acceptance | VERIFIED | PR-04 run `33302487008`: Release build PASS; official tests 327/327 PASS |
 | Closure CI | PENDING | One PR #10 run required after accepted closure push |
@@ -122,9 +122,15 @@ Restore details: [`recovery-restore-evidence.md`](recovery-restore-evidence.md).
 - Final exact package 5m guarded gate PASS. 15m attempt stopped after 6m25s on
   system swap; app peak/final footprint 199,281,728/190,204,992 bytes, cleanup
   PASS. 30m/2h NOT RUN after failed prerequisite.
-- Screenshot visual gate BLOCKED_ENVIRONMENT. Current terminal-only Git bundle
-  restore, implementation commit/push/CI and PR update remain pending. Merge,
-  notarization, tag and release remain BLOCKED.
+- Screenshot visual gate BLOCKED_ENVIRONMENT. Closure implementation commit:
+  `fb252bfa0afda8f57d51202d74baeb29e8954d79`.
+- Current terminal-only bundle:
+  `artifacts/backups/trdng-terminal-closure-fb252bf.bundle`; 4,253,174 bytes;
+  SHA-256 `efaecd333d9e4113cb29e974793d8684079ade28f37413d9156d9ad56d547a9a`;
+  permissions `0600`; bundle verify, isolated clone, strict fsck, exact HEAD and
+  clean worktree PASS. Retain through the closure/release decision.
+- Push/CI and PR update remain pending. Merge, notarization, tag and release
+  remain BLOCKED.
 
 ## Формат backup-записи
 

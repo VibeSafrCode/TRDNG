@@ -63,9 +63,12 @@ Date: 2026-08-31. Branch: `codex/adaptive-orderbooks`. Status:
 - Quiet-host guarded 15-, 30- and 120-minute gates remain required. The
   30-minute and two-hour runs were not started after the 15-minute prerequisite
   stopped.
-- Current terminal-only Git bundle/isolated restore is pending the accepted
-  implementation commit. The already verified pre-separation bundle is
-  historical only and is not represented as current recovery.
+- Closure implementation commit:
+  `fb252bfa0afda8f57d51202d74baeb29e8954d79`. Its current terminal-only Git
+  bundle passed verification, isolated clone, strict fsck, exact HEAD and clean
+  worktree checks. Exact artifact identity and retention are recorded in
+  [`recovery-restore-evidence.md`](recovery-restore-evidence.md). The already
+  verified pre-separation bundle remains historical only.
 - PR #10 publication and one GitHub CI run are pending. Merge, tag and release
   remain blocked until the visual and soak gates pass or the Founder explicitly
   accepts a documented waiver.
