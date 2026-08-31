@@ -37,8 +37,8 @@ public sealed class BybitPublicOrderBookClient : IPublicMarketDataClient
         _depth = depth;
         _session = new BybitOrderBookSession(new OrderBookEngine(
             new OrderBookCapacityPolicy(depth, checked(depth * 2))));
-        _clusterAggregator =
-            new TradeClusterAggregator(TimeSpan.FromSeconds(15), clusterPriceStep);
+        _clusterAggregator = new TradeClusterAggregator(
+            TimeSpan.FromSeconds(15), clusterPriceStep, maxCompletedClusters: 1);
     }
 
     public event Action<OrderBookSnapshot>? SnapshotReceived;

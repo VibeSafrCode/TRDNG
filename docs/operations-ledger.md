@@ -10,14 +10,18 @@
 |---|---|---|
 | External archive | VERIFIED | 12 MiB; directory comparison PASS |
 | Pre-separation Git bundle | VERIFIED COMPLETE | Full bundle verified before clean recreation |
-| Restore verification | NOT RUN | Recovery artifacts exist; restore procedure not executed |
+| Historical restore verification | VERIFIED | Pre-separation bundle cloned in isolation; full strict fsck, exact historical HEAD and clean worktree PASS on 2026-08-31 |
+| Current terminal restore verification | PENDING | Must cover the accepted closure implementation commit; historical bundle is not sufficient |
 | Repository root | VERIFIED | `5780ef66b20143e918e1d88399bfe985b0c1287e` |
 | Current main / origin | VERIFIED | PR-04 merged as `2e7d9218c2db462bd0b45ec9f372462b1945cd00` |
-| Current working branch | VERIFIED | local `main` fast-forwarded to `origin/main` after PR-04 merge |
-| GitHub publication | VERIFIED PUBLIC | Read-only check 2026-08-30: `PUBLIC`, default branch `main`; no visibility change performed in PR-02 |
+| Current working branch | VERIFIED WIP | `codex/adaptive-orderbooks`; closure implementation is not yet committed |
+| GitHub publication | VERIFIED PUBLIC | Read-only check 2026-08-31: `PUBLIC`, default branch `main`; no visibility change performed in this closure |
 | CI acceptance | VERIFIED | PR-04 run `33302487008`: Release build PASS; official tests 327/327 PASS |
+| Closure CI | PENDING | One PR #10 run required after accepted closure push |
 | Older sprint commit IDs | PRE-SEPARATION LOCAL HISTORY | IDs in older evidence documents are preserved by the verified bundle and are not ancestors of the recreated root |
-| Tag / release | NOT RUN | Не разрешены; проверяемых идентификаторов нет |
+| Tag / release | BLOCKED | Closure authority exists, but visual and 15/30/120-minute soak gates have not passed |
+
+Restore details: [`recovery-restore-evidence.md`](recovery-restore-evidence.md).
 
 ## 2026-08-20 masked credential UI verification
 
@@ -98,21 +102,29 @@
   `33302487008` PASS with 327/327 official tests. Merged to `main` as
   `2e7d9218c2db462bd0b45ec9f372462b1945cd00`.
 
-## 2026-08-30 local S1.7 adaptive-books package
+## 2026-08-30/31 S1.7 and cleanup closure package
 
 - Branch `codex/adaptive-orderbooks`; baseline
-  `b7b0e7060f4c00d7fcb072d78f02dfb59be2ee9e`; implementation remains
-  uncommitted pending independent audit.
-- Final Release solution build: PASS, 0 warnings/errors. One official local
-  VSTest attempt was IPC-blocked before execution and not retried.
-- One final self-contained `osx-arm64` synchronization replaced only the
-  existing ignored `artifacts/TRDNG.app`; strict deep ad-hoc codesign: PASS.
+  `b7b0e7060f4c00d7fcb072d78f02dfb59be2ee9e`; independent P0/P1 audit PASS.
+- Final Release solution build: PASS, 0 warnings/errors. Official local suite:
+  367/367 PASS. One-million-cycle replay and structural scale tiers: PASS.
+- The first publish process exited 1 without output and produced zero files;
+  the existing app remained untouched. One controlled retry with build-server
+  reuse disabled succeeded. One final self-contained `osx-arm64` synchronization replaced only
+  the existing ignored `artifacts/TRDNG.app`; strict deep ad-hoc codesign: PASS.
 - Packaged `Trdng.Desktop.dll` SHA-256:
-  `467f9b7c706bcfc7adeefbaccaaa956d0ee1ff59d3d0489bf797d2dd223f9c9d`.
+  `c5c65e792fd58c91f7c1fe6a609bc8ce89f6d061083c300afe566257a6b9b7b3`.
 - Signed executable SHA-256:
-  `84a68a4bf460885bac170fd82a4b0ed6f8843c7f456635c9a32667b87e5427a8`.
-- Exact package startup with BTC default: PASS. Populated-book final screenshot,
-  Git publication, CI, backup/restore, notarization, tag and release: NOT RUN.
+  `1d93a3a074aa0bfdf36e5a49091a9b1acf9d51ecaf2790678fa3de4ba6b25e90`.
+- Rollback package: `/private/tmp/trdng-s17-closure-package.F4ptfx/TRDNG.app.backup`;
+  current app and backup are each approximately 115 MiB. This temporary locator
+  is retained through the closure decision, not a long-term backup.
+- Final exact package 5m guarded gate PASS. 15m attempt stopped after 6m25s on
+  system swap; app peak/final footprint 199,281,728/190,204,992 bytes, cleanup
+  PASS. 30m/2h NOT RUN after failed prerequisite.
+- Screenshot visual gate BLOCKED_ENVIRONMENT. Current terminal-only Git bundle
+  restore, implementation commit/push/CI and PR update remain pending. Merge,
+  notarization, tag and release remain BLOCKED.
 
 ## Формат backup-записи
 

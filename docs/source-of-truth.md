@@ -21,6 +21,8 @@ sprint ledger и передаётся Founder/ведущему на решени
 | Stage 1 scope, sprint order, acceptance | [`stage-1-plan.md`](stage-1-plan.md) |
 | Статус спринта, фактические изменения, tests/build/package/memory evidence, risks/blockers | [`stage-1-ledger.md`](stage-1-ledger.md) |
 | Backup, restore, commit, tag, package и release evidence | [`operations-ledger.md`](operations-ledger.md) |
+| Isolated recovery verification | [`recovery-restore-evidence.md`](recovery-restore-evidence.md) |
+| S1.7 + cleanup closure gates | [`closure-cleanup-evidence.md`](closure-cleanup-evidence.md) |
 
 ## Правила доказательности
 

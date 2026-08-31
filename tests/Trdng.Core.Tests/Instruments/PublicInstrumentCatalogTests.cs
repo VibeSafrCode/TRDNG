@@ -146,6 +146,54 @@ public sealed class PublicInstrumentCatalogTests
     }
 
     [Fact]
+    public void RefreshTimingAndReplacementAreBoundedAndFailClosed()
+    {
+        var now = DateTimeOffset.UnixEpoch + TimeSpan.FromHours(2);
+        var loaded = now - TimeSpan.FromMinutes(10);
+        var instrument = new CanonicalInstrument("BTC", "USDT", MarketProduct.Perpetual);
+        VenueCatalogLoadResult Success(TradingVenue venue) => new(
+            venue,
+            [new(instrument, venue, venue == TradingVenue.Gate ? "BTC_USDT" : "BTCUSDT",
+                0.1m)],
+            null);
+
+        Assert.False(PublicCatalogRefreshPolicy.ShouldRefresh(
+            now - TimeSpan.FromMinutes(9), now, TimeSpan.FromMinutes(10)));
+        Assert.True(PublicCatalogRefreshPolicy.ShouldRefresh(
+            loaded, now, TimeSpan.FromMinutes(10)));
+        Assert.True(PublicCatalogRefreshPolicy.ShouldRefresh(
+            now + TimeSpan.FromSeconds(1), now, TimeSpan.FromMinutes(10)));
+
+        var complete = new[]
+        {
+            Success(TradingVenue.Mexc),
+            Success(TradingVenue.Mexc),
+            Success(TradingVenue.Gate),
+            Success(TradingVenue.Bybit)
+        };
+        Assert.Equal(PublicCatalogRefreshDecision.Replace,
+            PublicCatalogRefreshPolicy.Decide(loaded, now, TimeSpan.FromMinutes(15),
+                complete, 4, complete.Sum(result => result.Entries.Count)));
+
+        var incomplete = complete[..3];
+        Assert.Equal(PublicCatalogRefreshDecision.RetainFresh,
+            PublicCatalogRefreshPolicy.Decide(now - TimeSpan.FromMinutes(14), now,
+                TimeSpan.FromMinutes(15), incomplete, 4,
+                incomplete.Sum(result => result.Entries.Count)));
+        Assert.Equal(PublicCatalogRefreshDecision.RetainStale,
+            PublicCatalogRefreshPolicy.Decide(now - TimeSpan.FromMinutes(16), now,
+                TimeSpan.FromMinutes(15), incomplete, 4,
+                incomplete.Sum(result => result.Entries.Count)));
+        Assert.Equal(PublicCatalogRefreshDecision.Replace,
+            PublicCatalogRefreshPolicy.Decide(null, now,
+                TimeSpan.FromMinutes(15), incomplete, 4,
+                incomplete.Sum(result => result.Entries.Count)));
+        Assert.Equal(PublicCatalogRefreshDecision.RetainStale,
+            PublicCatalogRefreshPolicy.Decide(null, now,
+                TimeSpan.FromMinutes(15), [], 4, 0));
+    }
+
+    [Fact]
     public void StartupAndProductFallbackPreferBitcoinWhenAvailable()
     {
         var catalog = new PublicInstrumentCatalog();
@@ -160,6 +208,34 @@ public sealed class PublicInstrumentCatalogTests
         Assert.Equal(btcPerpetual, CatalogSelectionPolicy.ChooseInitial(catalog));
         Assert.Equal(btcSpot, CatalogSelectionPolicy.ChooseForProduct(
             catalog, apt, MarketProduct.Spot));
+    }
+
+    [Fact]
+    public void ReconciliationBootstrapsRebuildsOrFailsClosedExactly()
+    {
+        var instrument = new CanonicalInstrument("BTC", "USDT", MarketProduct.Perpetual);
+        var oldEntry = new PublicCatalogEntry(
+            instrument, TradingVenue.Bybit, "BTCUSDT", 0.1m);
+        var newEntry = oldEntry with { TickSize = 0.01m };
+        PublicCatalogEntry?[] empty = [null, null, null];
+
+        Assert.Equal(PublicCatalogReconciliationAction.None,
+            PublicCatalogReconciliationPolicy.Decide(
+                initialLoad: true, active: null, empty, empty));
+        Assert.Equal(PublicCatalogReconciliationAction.Bootstrap,
+            PublicCatalogReconciliationPolicy.Decide(
+                initialLoad: false, active: null, empty, [newEntry, null, null]));
+        Assert.Equal(PublicCatalogReconciliationAction.None,
+            PublicCatalogReconciliationPolicy.Decide(
+                initialLoad: false, instrument, [oldEntry, null, null],
+                [oldEntry, null, null]));
+        Assert.Equal(PublicCatalogReconciliationAction.RebuildActive,
+            PublicCatalogReconciliationPolicy.Decide(
+                initialLoad: false, instrument, [oldEntry, null, null],
+                [newEntry, null, null]));
+        Assert.Equal(PublicCatalogReconciliationAction.FailClosedActive,
+            PublicCatalogReconciliationPolicy.Decide(
+                initialLoad: false, instrument, [oldEntry, null, null], empty));
     }
 
     [Fact]

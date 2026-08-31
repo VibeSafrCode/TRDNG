@@ -28,6 +28,20 @@ Before sharing this folder for a new sprint audit, complete
 prompt with the current accepted scope, exact evidence and open debt.
 
 Current implementation-review entry point:
+[P0_MEMORY_INCIDENT_AUDIT_PACKET.md](P0_MEMORY_INCIDENT_AUDIT_PACKET.md).
+
+Current closure evidence:
+[`../closure-cleanup-evidence.md`](../closure-cleanup-evidence.md).
+Current closure audit request:
+[CLOSURE_CLEANUP_AUDIT_PACKET.md](CLOSURE_CLEANUP_AUDIT_PACKET.md).
+
+Repository recovery evidence is maintained in
+[`../recovery-restore-evidence.md`](../recovery-restore-evidence.md).
+
+The bounded public MEXC polling measurement is maintained in
+[`../mexc-polling-evidence.md`](../mexc-polling-evidence.md).
+
+The superseded S1.7 review scope remains available in
 [S17_ADAPTIVE_ORDERBOOKS_AUDIT_PACKET.md](S17_ADAPTIVE_ORDERBOOKS_AUDIT_PACKET.md).
 
 Previous accepted review packet:

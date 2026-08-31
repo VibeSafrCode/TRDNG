@@ -45,6 +45,8 @@ public readonly record struct BookDisplayLayout(
 public static class BookDisplayPolicy
 {
     public const int MinimumDepth = 8;
+    public const int MaximumDepthPerSide = 200;
+    public const decimal MaximumManualVolumeReference = 1_000_000_000_000m;
     public const double TargetRowHeight = 18;
     public const double HorizontalContentMargin = 20;
     public const double SpreadSafetyMarginPerSide = 4;
@@ -56,7 +58,7 @@ public static class BookDisplayPolicy
         double viewportWidth,
         double halfViewportHeight)
     {
-        if (maximumDepth is < MinimumDepth or > 1_000)
+        if (maximumDepth is < MinimumDepth or > MaximumDepthPerSide)
             throw new ArgumentOutOfRangeException(nameof(maximumDepth));
         if (manualDepth < MinimumDepth || manualDepth > maximumDepth)
             throw new ArgumentOutOfRangeException(nameof(manualDepth));

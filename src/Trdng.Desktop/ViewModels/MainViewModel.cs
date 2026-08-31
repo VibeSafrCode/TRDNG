@@ -11,6 +11,7 @@ using Trdng.Mexc.MarketData;
 using Trdng.Mexc.Private;
 using Trdng.Core.Orders;
 using Trdng.Core.Credentials;
+using Trdng.Core.Diagnostics;
 
 namespace Trdng.Desktop.ViewModels;
 
@@ -21,9 +22,15 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
     private IPublicMarketDataClient? _mexcClient;
     private readonly MarketSelectionController _selectionController;
     private readonly PublicInstrumentCatalog _publicCatalog = new();
+    private readonly object _catalogSync = new();
     private DateTimeOffset? _catalogLoadedAt;
     private string _catalogBaseState = "КАТАЛОГ · ЗАГРУЗКА";
     private static readonly TimeSpan CatalogMaxAge = TimeSpan.FromMinutes(15);
+    private static readonly TimeSpan CatalogRefreshAfter = TimeSpan.FromMinutes(10);
+    private static readonly TimeSpan CatalogRefreshCheckInterval = TimeSpan.FromMinutes(1);
+    private readonly CancellationTokenSource _catalogLifetime = new();
+    private readonly Task _initializationTask;
+    private Task? _catalogRefreshTask;
     private readonly SemaphoreSlim _selectionLifecycleGate = new(1, 1);
     private Action<OrderBookSnapshot>? _bybitSnapshotHandler;
     private Action<TradeCluster>? _bybitClusterHandler;
@@ -44,6 +51,13 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
     private CancellationTokenSource _metadataLifetime = new();
     private readonly MarketDataFreshnessOptions _freshness;
     private readonly DispatcherTimer _healthTimer;
+    private readonly DispatcherTimer _renderTimer;
+    private readonly DispatcherTimer _bookSettingsSaveTimer;
+    private readonly FileBookDisplaySettingsStore? _bookSettingsStore;
+    private readonly LatestBookDisplaySettingsWriter? _bookSettingsWriter;
+    private int _disposeStarted;
+    private readonly BoundedRenderUpdateGate _renderUpdateGate = new();
+    private readonly object _marketDataSync = new();
     private OrderBookSnapshot? _latestSnapshot;
     private DateTimeOffset _latestSnapshotAt;
     private MarketDataConnectionState _bybitState =
@@ -68,6 +82,7 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
     private IReadOnlyDictionary<(LiquiditySide Side, decimal Price), LiquidityLevelState>
         _latestGateLiquidity =
             new Dictionary<(LiquiditySide, decimal), LiquidityLevelState>();
+    private TradeCluster? _latestCluster;
     private int _scaleEligibilityMask = -1;
     private readonly DryRunOrderFactory _dryRunOrderFactory =
         new(new ClientOrderIdGenerator());
@@ -83,6 +98,9 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
     private readonly ICredentialVault _credentialVault;
     private readonly CredentialPairController _readOnlyCredentials;
     private readonly CredentialPairController _orderTestCredentials;
+    private int _memoryEmergencyStarted;
+    private int _memoryWarningActive;
+    private int _warningRenderTick;
     public MainViewModel() : this(MarketDataFreshnessOptions.ScalpingDefault)
     {
     }
@@ -104,6 +122,21 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
             MexcOrderTestCredentialProvider.ApiKeyIdentity,
             MexcOrderTestCredentialProvider.SecretIdentity,
             () => _dryRunConfirmation.KillSwitchEngaged, TimeSpan.FromSeconds(8));
+        MexcBookSettings = new(TradingVenue.Mexc, 200);
+        GateBookSettings = new(TradingVenue.Gate, 50);
+        BybitBookSettings = new(TradingVenue.Bybit, 200);
+        _bookSettingsStore = CreateBookDisplaySettingsStore();
+        _bookSettingsWriter = _bookSettingsStore is null
+            ? null
+            : new LatestBookDisplaySettingsWriter(
+                settings => _bookSettingsStore.Save(settings),
+                ObserveBookSettingsSave);
+        RestoreBookDisplaySettings();
+        _bookSettingsSaveTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(500)
+        };
+        _bookSettingsSaveTimer.Tick += BookSettingsSaveTimerOnTick;
         (_simulationStore, _simulationJournalAvailable) = CreateSimulationStore();
         _simulationPlayback = new(_simulationStore);
         SimulationTimeline = _simulationJournalAvailable
@@ -111,16 +144,23 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
             : "JOURNAL BLOCKED · FAIL CLOSED";
         _selectionController = new MarketSelectionController(CreateClient, _publicCatalog.Find);
         _selectionController.Resetting += OnSelectionResetting;
-        MexcBookSettings.Changed += RebuildBook;
-        GateBookSettings.Changed += RebuildBook;
-        BybitBookSettings.Changed += RebuildBook;
+        MexcBookSettings.Changed += OnBookSettingsChanged;
+        GateBookSettings.Changed += OnBookSettingsChanged;
+        BybitBookSettings.Changed += OnBookSettingsChanged;
+        _renderTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromSeconds(
+                1d / BoundedBookScalePolicy.MaximumRenderHertz)
+        };
+        _renderTimer.Tick += RenderTimerOnTick;
+        _renderTimer.Start();
         _healthTimer = new DispatcherTimer
         {
             Interval = TimeSpan.FromMilliseconds(500)
         };
         _healthTimer.Tick += HealthTimerOnTick;
         _healthTimer.Start();
-        _ = InitializeAsync();
+        _initializationTask = InitializeAsync();
         _ = RefreshCredentialStatusAsync();
     }
 
@@ -138,14 +178,14 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
 
     public ObservableCollection<BookLevelViewModel> MexcBids { get; } = [];
 
-    public VenueBookSettingsViewModel MexcBookSettings { get; } =
-        new(TradingVenue.Mexc, 200);
+    [ObservableProperty]
+    public partial string RuntimeSafetyStatus { get; set; } = string.Empty;
 
-    public VenueBookSettingsViewModel GateBookSettings { get; } =
-        new(TradingVenue.Gate, 50);
+    public VenueBookSettingsViewModel MexcBookSettings { get; }
 
-    public VenueBookSettingsViewModel BybitBookSettings { get; } =
-        new(TradingVenue.Bybit, 200);
+    public VenueBookSettingsViewModel GateBookSettings { get; }
+
+    public VenueBookSettingsViewModel BybitBookSettings { get; }
 
     [ObservableProperty]
     public partial string ConnectionStatus { get; set; } = "CONNECTING";
@@ -341,7 +381,7 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
     public async Task SelectProductAsync(MarketProduct product)
     {
         if (!PublicCatalogFreshness.IsFresh(
-                _catalogLoadedAt, DateTimeOffset.UtcNow, CatalogMaxAge))
+                CatalogLoadedAt(), DateTimeOffset.UtcNow, CatalogMaxAge))
         {
             CatalogState = "КАТАЛОГ · УСТАРЕЛ";
             return;
@@ -362,40 +402,28 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
         => await SelectMarketAsync(baseAsset, "USDT", product).ConfigureAwait(false);
 
     public async Task SelectMarketAsync(string baseAsset, string quoteAsset, MarketProduct product)
+        => await SelectMarketAsync(baseAsset, quoteAsset, product,
+            CancellationToken.None, forceRefresh: false).ConfigureAwait(false);
+
+    private async Task SelectMarketAsync(
+        string baseAsset,
+        string quoteAsset,
+        MarketProduct product,
+        CancellationToken cancellationToken,
+        bool forceRefresh)
     {
         if (!PublicCatalogFreshness.IsFresh(
-                _catalogLoadedAt, DateTimeOffset.UtcNow, CatalogMaxAge))
+                CatalogLoadedAt(), DateTimeOffset.UtcNow, CatalogMaxAge))
         {
             await Dispatcher.UIThread.InvokeAsync(() => CatalogState = "КАТАЛОГ · УСТАРЕЛ");
             return;
         }
         var requestId = Interlocked.Increment(ref _latestRequestId);
-        await _selectionLifecycleGate.WaitAsync().ConfigureAwait(false);
+        await _selectionLifecycleGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            if (requestId != Volatile.Read(ref _latestRequestId)) return;
-            if (!await _selectionController.SelectAsync(baseAsset, quoteAsset, product).ConfigureAwait(false)) return;
-            if (requestId != Volatile.Read(ref _latestRequestId)) return;
-            var selected = _selectionController.SelectedInstrument!.Value;
-            await Dispatcher.UIThread.InvokeAsync(() =>
-            {
-                SelectedProduct = selected.Product;
-                SelectedAsset = selected.BaseAsset;
-                SelectedQuote = selected.QuoteAsset;
-                ApplySelectionLabels(selected);
-            });
-
-            _client = _selectionController.Clients.OfType<BybitPublicOrderBookClient>().SingleOrDefault();
-            _gateClient = _selectionController.Clients.OfType<GatePublicMarketDataClient>().SingleOrDefault();
-            _mexcClient = _selectionController.Clients.SingleOrDefault(client => client.Venue == "MEXC");
-            AttachClients();
-            _metadataLifetime = new CancellationTokenSource();
-            _ = LoadInstrumentMetadataSafelyAsync(
-                selected.BaseAsset,
-                selected.QuoteAsset,
-                selected.Product,
-                _metadataLifetime.Token);
-            foreach (var client in _selectionController.Clients) client.Start();
+            await SelectMarketUnderLifecycleGateAsync(baseAsset, quoteAsset, product,
+                requestId, cancellationToken, forceRefresh).ConfigureAwait(false);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -406,6 +434,49 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
             });
         }
         finally { _selectionLifecycleGate.Release(); }
+    }
+
+    private async Task<bool> SelectMarketUnderLifecycleGateAsync(
+        string baseAsset,
+        string quoteAsset,
+        MarketProduct product,
+        long? requestId,
+        CancellationToken cancellationToken,
+        bool forceRefresh)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (requestId is { } expected && expected != Volatile.Read(ref _latestRequestId))
+            return false;
+        if (!await _selectionController.SelectAsync(baseAsset, quoteAsset, product,
+                forceRefresh, cancellationToken).ConfigureAwait(false))
+            return false;
+        cancellationToken.ThrowIfCancellationRequested();
+        if (requestId is { } current && current != Volatile.Read(ref _latestRequestId))
+            return false;
+        var selected = _selectionController.SelectedInstrument!.Value;
+        await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            SelectedProduct = selected.Product;
+            SelectedAsset = selected.BaseAsset;
+            SelectedQuote = selected.QuoteAsset;
+            ApplySelectionLabels(selected);
+        });
+
+        _client = _selectionController.Clients.OfType<BybitPublicOrderBookClient>()
+            .SingleOrDefault();
+        _gateClient = _selectionController.Clients.OfType<GatePublicMarketDataClient>()
+            .SingleOrDefault();
+        _mexcClient = _selectionController.Clients
+            .SingleOrDefault(client => client.Venue == "MEXC");
+        AttachClients();
+        _metadataLifetime = new CancellationTokenSource();
+        _ = LoadInstrumentMetadataSafelyAsync(
+            selected.BaseAsset,
+            selected.QuoteAsset,
+            selected.Product,
+            _metadataLifetime.Token);
+        foreach (var client in _selectionController.Clients) client.Start();
+        return true;
     }
 
     public void SelectDryRunVenue(TradingVenue venue)
@@ -674,14 +745,17 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
 
     private ReferencePrice? CurrentReferencePrice(TradingVenue venue)
     {
-        var (snapshot, observedAt) = venue switch
+        lock (_marketDataSync)
         {
-            TradingVenue.Mexc => (_latestMexcSnapshot, _latestMexcSnapshotAt),
-            TradingVenue.Gate => (_latestGateSnapshot, _latestGateSnapshotAt),
-            TradingVenue.Bybit => (_latestSnapshot, _latestSnapshotAt),
-            _ => (null, default)
-        };
-        return ExecutableReferencePrice.Select(snapshot, _dryRunSide, observedAt);
+            var (snapshot, observedAt) = venue switch
+            {
+                TradingVenue.Mexc => (_latestMexcSnapshot, _latestMexcSnapshotAt),
+                TradingVenue.Gate => (_latestGateSnapshot, _latestGateSnapshotAt),
+                TradingVenue.Bybit => (_latestSnapshot, _latestSnapshotAt),
+                _ => (null, default)
+            };
+            return ExecutableReferencePrice.Select(snapshot, _dryRunSide, observedAt);
+        }
     }
 
     public void UpdateBookViewport(TradingVenue venue, double width, double totalHeight)
@@ -707,21 +781,129 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
         _ => throw new ArgumentOutOfRangeException(nameof(venue))
     };
 
+    private void OnBookSettingsChanged()
+    {
+        RequestRenderRefresh();
+        if (_bookSettingsStore is null) return;
+        SetBookSettingsPersistenceState("НАСТРОЙКИ · ОЖИДАЮТ СОХРАНЕНИЯ");
+        _bookSettingsSaveTimer.Stop();
+        _bookSettingsSaveTimer.Start();
+    }
+
+    private void BookSettingsSaveTimerOnTick(object? sender, EventArgs eventArgs)
+    {
+        _bookSettingsSaveTimer.Stop();
+        QueueBookDisplaySettingsSave();
+    }
+
+    private void QueueBookDisplaySettingsSave()
+    {
+        if (_bookSettingsWriter is null)
+        {
+            SetBookSettingsPersistenceState("НАСТРОЙКИ · ТОЛЬКО СЕССИЯ");
+            return;
+        }
+        _bookSettingsWriter.Queue(CaptureBookDisplaySettings());
+    }
+
+    private void ObserveBookSettingsSave(BookDisplaySettingsSaveState result)
+    {
+        Dispatcher.UIThread.Post(() => SetBookSettingsPersistenceState(result switch
+        {
+            BookDisplaySettingsSaveState.Saved =>
+                "НАСТРОЙКИ · СОХРАНЕНЫ ЛОКАЛЬНО",
+            BookDisplaySettingsSaveState.Invalid =>
+                "НАСТРОЙКИ · ОШИБКА · НЕ СОХРАНЕНЫ",
+            _ => "НАСТРОЙКИ · ХРАНИЛИЩЕ НЕДОСТУПНО"
+        }));
+    }
+
+    private async Task FlushBookDisplaySettingsAsync()
+    {
+        if (_bookSettingsWriter is null) return;
+        await _bookSettingsWriter.FlushAsync(CaptureBookDisplaySettings())
+            .ConfigureAwait(false);
+    }
+
+    private BookDisplaySettingsSnapshot[] CaptureBookDisplaySettings() =>
+    [
+        MexcBookSettings.Snapshot(),
+        GateBookSettings.Snapshot(),
+        BybitBookSettings.Snapshot()
+    ];
+
+    private void RestoreBookDisplaySettings()
+    {
+        var loaded = _bookSettingsStore?.Load();
+        if (loaded?.State == BookDisplaySettingsLoadState.Loaded)
+        {
+            foreach (var pair in loaded.Settings)
+                BookSettings(pair.Key).Apply(pair.Value);
+        }
+        SetBookSettingsPersistenceState(loaded?.State switch
+        {
+            BookDisplaySettingsLoadState.Loaded => "НАСТРОЙКИ · ЗАГРУЖЕНЫ ЛОКАЛЬНО",
+            BookDisplaySettingsLoadState.Invalid => "НАСТРОЙКИ · ФАЙЛ ОТКЛОНЕН · БАЗОВЫЕ",
+            BookDisplaySettingsLoadState.Unavailable => "НАСТРОЙКИ · ХРАНИЛИЩЕ НЕДОСТУПНО",
+            _ => "НАСТРОЙКИ · ПО УМОЛЧАНИЮ"
+        });
+    }
+
+    private void SetBookSettingsPersistenceState(string state)
+    {
+        MexcBookSettings.PersistenceState = state;
+        GateBookSettings.PersistenceState = state;
+        BybitBookSettings.PersistenceState = state;
+    }
+
+    private static FileBookDisplaySettingsStore? CreateBookDisplaySettingsStore()
+    {
+        try
+        {
+            var root = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            if (string.IsNullOrWhiteSpace(root)) return null;
+            return new FileBookDisplaySettingsStore(Path.Combine(
+                root, "MacMakeMoney_618", "book-display-settings.v1.json"));
+        }
+        catch (Exception exception) when (exception is ArgumentException or
+            NotSupportedException or PathTooLongException)
+        {
+            return null;
+        }
+    }
+
     public async ValueTask DisposeAsync()
     {
+        if (Interlocked.Exchange(ref _disposeStarted, 1) != 0) return;
+        await _catalogLifetime.CancelAsync().ConfigureAwait(false);
+        try { await _initializationTask.ConfigureAwait(false); }
+        catch (OperationCanceledException) when (_catalogLifetime.IsCancellationRequested) { }
+        if (_catalogRefreshTask is not null)
+        {
+            try { await _catalogRefreshTask.ConfigureAwait(false); }
+            catch (OperationCanceledException) when (_catalogLifetime.IsCancellationRequested) { }
+        }
+
+        _bookSettingsSaveTimer.Stop();
+        _bookSettingsSaveTimer.Tick -= BookSettingsSaveTimerOnTick;
+        MexcBookSettings.Changed -= OnBookSettingsChanged;
+        GateBookSettings.Changed -= OnBookSettingsChanged;
+        BybitBookSettings.Changed -= OnBookSettingsChanged;
+        await FlushBookDisplaySettingsAsync().ConfigureAwait(false);
+
         await _selectionLifecycleGate.WaitAsync().ConfigureAwait(false);
         try
         {
             _healthTimer.Stop();
             _healthTimer.Tick -= HealthTimerOnTick;
-            MexcBookSettings.Changed -= RebuildBook;
-            GateBookSettings.Changed -= RebuildBook;
-            BybitBookSettings.Changed -= RebuildBook;
+            _renderTimer.Stop();
+            _renderTimer.Tick -= RenderTimerOnTick;
             await _metadataLifetime.CancelAsync();
             DetachClients();
             _selectionController.Resetting -= OnSelectionResetting;
             await _selectionController.DisposeAsync();
             _metadataLifetime.Dispose();
+            _catalogLifetime.Dispose();
             _catalogHttpClient.Dispose();
             _publicMarketDataHttpClient.Dispose();
         }
@@ -732,25 +914,43 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
         }
     }
 
+    internal async Task EmergencyStopPublicDataAsync()
+    {
+        if (Interlocked.Exchange(ref _memoryEmergencyStarted, 1) != 0) return;
+        await _selectionLifecycleGate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            await _catalogLifetime.CancelAsync().ConfigureAwait(false);
+            await _metadataLifetime.CancelAsync().ConfigureAwait(false);
+            DetachClients();
+            _selectionController.Resetting -= OnSelectionResetting;
+            await _selectionController.DisposeAsync().ConfigureAwait(false);
+        }
+        finally
+        {
+            _selectionLifecycleGate.Release();
+        }
+    }
+
+    internal void ApplyMemoryWarning()
+    {
+        if (Interlocked.Exchange(ref _memoryWarningActive, 1) != 0) return;
+        Dispatcher.UIThread.Post(() =>
+            RuntimeSafetyStatus = "ПАМЯТЬ · WARNING · КАДЕНС СНИЖЕН");
+    }
+
     private void OnSnapshotReceived(OrderBookSnapshot snapshot, long expectedGeneration)
     {
-        if (!_generation.IsCurrent(expectedGeneration)) return;
-        var liquidity = _liquidityTrackers.Bybit.Observe(snapshot, DateTimeOffset.UtcNow);
-        _latestSnapshot = snapshot;
-        _latestSnapshotAt = DateTimeOffset.UtcNow;
-        _latestLiquidity = liquidity;
-
-        Dispatcher.UIThread.Post(() =>
+        lock (_marketDataSync)
         {
             if (!_generation.IsCurrent(expectedGeneration)) return;
-            RebuildBook();
-            UpdateConsensus(VisibleConsensusDepth());
-            UpdateCrossVenueComparison();
-            BybitEmptyState = string.Empty;
+            var observedAt = DateTimeOffset.UtcNow;
+            _latestSnapshot = snapshot;
+            _latestSnapshotAt = observedAt;
+            _latestLiquidity = _liquidityTrackers.Bybit.Observe(snapshot, observedAt);
+        }
 
-            LastPrice = snapshot.BestBid is { } bid ? FormatPrice(bid) : "—";
-            Spread = snapshot.Spread is { } spread ? FormatPrice(spread) : "—";
-        });
+        RequestRenderRefresh();
     }
 
     private void RebuildBook()
@@ -845,51 +1045,39 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
             settings.AutomaticVolumeScale,
             settings.ManualVolumeReference);
         var textSize = Math.Clamp(layout.RowHeight * 0.62, 9, 16);
-        Replace(asks, ToViewModels(snapshot.Asks, askPrices, LiquiditySide.Ask,
+        ReplaceBookLevels(asks, ToBookPresentations(snapshot.Asks, askPrices, LiquiditySide.Ask,
             liquidity, layout, textSize, volumeScale.AskLargest,
             volumeScale.AskReference, settings.Palette));
-        Replace(bids, ToViewModels(snapshot.Bids, bidPrices, LiquiditySide.Bid,
+        ReplaceBookLevels(bids, ToBookPresentations(snapshot.Bids, bidPrices, LiquiditySide.Bid,
             liquidity, layout, textSize, volumeScale.BidLargest,
             volumeScale.BidReference, settings.Palette));
     }
 
     private void OnGateSnapshotReceived(OrderBookSnapshot snapshot, long expectedGeneration)
     {
-        if (!_generation.IsCurrent(expectedGeneration)) return;
-        _latestGateSnapshot = snapshot;
-        _latestGateSnapshotAt = DateTimeOffset.UtcNow;
-        _latestGateLiquidity =
-            _liquidityTrackers.Gate.Observe(snapshot, DateTimeOffset.UtcNow);
-
-        Dispatcher.UIThread.Post(() =>
+        lock (_marketDataSync)
         {
             if (!_generation.IsCurrent(expectedGeneration)) return;
-            RebuildBook();
-            UpdateCrossVenueComparison();
-            GateEmptyState = string.Empty;
-            GateLastPrice =
-                snapshot.BestBid is { } bid ? FormatPrice(bid) : "—";
-            GateSpread =
-                snapshot.Spread is { } spread ? FormatPrice(spread) : "—";
-        });
+            var observedAt = DateTimeOffset.UtcNow;
+            _latestGateSnapshot = snapshot;
+            _latestGateSnapshotAt = observedAt;
+            _latestGateLiquidity = _liquidityTrackers.Gate.Observe(snapshot, observedAt);
+        }
+
+        RequestRenderRefresh();
     }
 
     private void OnMexcSnapshotReceived(OrderBookSnapshot snapshot, long expectedGeneration)
     {
-        if (!_generation.IsCurrent(expectedGeneration)) return;
-        _latestMexcSnapshot = snapshot;
-        _latestMexcSnapshotAt = DateTimeOffset.UtcNow;
-        _latestMexcLiquidity = _liquidityTrackers.Mexc.Observe(snapshot, _latestMexcSnapshotAt);
-        Dispatcher.UIThread.Post(() =>
+        lock (_marketDataSync)
         {
             if (!_generation.IsCurrent(expectedGeneration)) return;
-            RebuildBook();
-            MexcEmptyState = string.Empty;
-            MexcLastPrice = snapshot.BestBid is { } bid ? FormatPrice(bid) : "—";
-            MexcSpread = snapshot.Spread is { } spread ? FormatPrice(spread) : "—";
-            UpdateConsensus(VisibleConsensusDepth());
-            UpdateCrossVenueComparison();
-        });
+            var observedAt = DateTimeOffset.UtcNow;
+            _latestMexcSnapshot = snapshot;
+            _latestMexcSnapshotAt = observedAt;
+            _latestMexcLiquidity = _liquidityTrackers.Mexc.Observe(snapshot, observedAt);
+        }
+        RequestRenderRefresh();
     }
 
     private void OnMexcStateChanged(
@@ -897,27 +1085,27 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
         string? detail,
         long expectedGeneration)
     {
-        if (!_generation.IsCurrent(expectedGeneration)) return;
-        _mexcState = state;
-        if (state is MarketDataConnectionState.WaitingForSnapshot or
-            MarketDataConnectionState.Reconnecting or MarketDataConnectionState.Disconnected)
-        {
-            _liquidityTrackers.Mexc.Reset();
-            _latestMexcSnapshot = null;
-        }
-        Dispatcher.UIThread.Post(() =>
+        lock (_marketDataSync)
         {
             if (!_generation.IsCurrent(expectedGeneration)) return;
-            MexcConnectionStatus = FormatConnectionState(state, _latestMexcSnapshotAt);
-            if (_latestMexcSnapshot is null) MexcEmptyState = MarketDataEmptyState(state);
-            RebuildBook();
-            UpdateCrossVenueComparison();
-        });
+            _mexcState = state;
+            if (state is MarketDataConnectionState.WaitingForSnapshot or
+                MarketDataConnectionState.Reconnecting or MarketDataConnectionState.Disconnected)
+            {
+                _liquidityTrackers.Mexc.Reset();
+                _latestMexcSnapshot = null;
+            }
+        }
+        RequestRenderRefresh();
     }
 
     private void OnGateTradesReceived(IReadOnlyList<PublicTrade> trades, long expectedGeneration)
     {
-        if (_generation.IsCurrent(expectedGeneration)) _liquidityTrackers.Gate.ObserveTrades(trades);
+        lock (_marketDataSync)
+        {
+            if (_generation.IsCurrent(expectedGeneration))
+                _liquidityTrackers.Gate.ObserveTrades(trades);
+        }
     }
 
     private void OnGateStateChanged(
@@ -925,29 +1113,29 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
         string? detail,
         long expectedGeneration)
     {
-        if (!_generation.IsCurrent(expectedGeneration)) return;
-        _gateState = state;
-        if (state is MarketDataConnectionState.WaitingForSnapshot or
-            MarketDataConnectionState.Reconnecting or
-            MarketDataConnectionState.Disconnected)
-        {
-            _liquidityTrackers.Gate.Reset();
-            _latestGateSnapshot = null;
-        }
-
-        Dispatcher.UIThread.Post(() =>
+        lock (_marketDataSync)
         {
             if (!_generation.IsCurrent(expectedGeneration)) return;
-            GateConnectionStatus = FormatConnectionState(state);
-            if (_latestGateSnapshot is null) GateEmptyState = MarketDataEmptyState(state);
-            RebuildBook();
-            UpdateCrossVenueComparison();
-        });
+            _gateState = state;
+            if (state is MarketDataConnectionState.WaitingForSnapshot or
+                MarketDataConnectionState.Reconnecting or
+                MarketDataConnectionState.Disconnected)
+            {
+                _liquidityTrackers.Gate.Reset();
+                _latestGateSnapshot = null;
+            }
+        }
+
+        RequestRenderRefresh();
     }
 
     private void OnTradesReceived(IReadOnlyList<PublicTrade> trades, long expectedGeneration)
     {
-        if (_generation.IsCurrent(expectedGeneration)) _liquidityTrackers.Bybit.ObserveTrades(trades);
+        lock (_marketDataSync)
+        {
+            if (_generation.IsCurrent(expectedGeneration))
+                _liquidityTrackers.Bybit.ObserveTrades(trades);
+        }
     }
 
     private void OnStateChanged(
@@ -955,24 +1143,20 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
         string? detail,
         long expectedGeneration)
     {
-        if (!_generation.IsCurrent(expectedGeneration)) return;
-        _bybitState = state;
-        if (state is MarketDataConnectionState.WaitingForSnapshot or
-            MarketDataConnectionState.Reconnecting or
-            MarketDataConnectionState.Disconnected)
-        {
-            _liquidityTrackers.Bybit.Reset();
-            _latestSnapshot = null;
-        }
-
-        Dispatcher.UIThread.Post(() =>
+        lock (_marketDataSync)
         {
             if (!_generation.IsCurrent(expectedGeneration)) return;
-            ConnectionStatus = FormatConnectionState(state);
-            if (_latestSnapshot is null) BybitEmptyState = MarketDataEmptyState(state);
-            RebuildBook();
-            UpdateCrossVenueComparison();
-        });
+            _bybitState = state;
+            if (state is MarketDataConnectionState.WaitingForSnapshot or
+                MarketDataConnectionState.Reconnecting or
+                MarketDataConnectionState.Disconnected)
+            {
+                _liquidityTrackers.Bybit.Reset();
+                _latestSnapshot = null;
+            }
+        }
+
+        RequestRenderRefresh();
     }
 
     private string FormatConnectionState(
@@ -1026,25 +1210,92 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
     private void HealthTimerOnTick(object? sender, EventArgs eventArgs)
     {
         var now = DateTimeOffset.UtcNow;
-        ConnectionStatus = SelectedProduct == MarketProduct.Spot
-            ? "UNAVAILABLE"
-            : FormatConnectionState(_bybitState, _latestSnapshotAt);
-        GateConnectionStatus = SelectedProduct == MarketProduct.Spot
-            ? "UNAVAILABLE"
-            : FormatConnectionState(_gateState, _latestGateSnapshotAt);
-        MexcConnectionStatus = _mexcClient is null
-            ? "UNAVAILABLE" : FormatConnectionState(_mexcState, _latestMexcSnapshotAt);
-        if (_client is null) ConnectionStatus = "UNAVAILABLE";
-        if (_gateClient is null) GateConnectionStatus = "UNAVAILABLE";
-        CatalogState = CatalogPresentationPolicy.PreserveOrMarkStale(
-            CatalogState, _catalogLoadedAt, now, CatalogMaxAge);
-        var eligibilityMask = GetScaleEligibilityMask(now);
-        if (eligibilityMask != _scaleEligibilityMask)
+        lock (_marketDataSync)
         {
-            _scaleEligibilityMask = eligibilityMask;
-            RebuildBook();
+            ConnectionStatus = SelectedProduct == MarketProduct.Spot
+                ? "UNAVAILABLE"
+                : FormatConnectionState(_bybitState, _latestSnapshotAt);
+            GateConnectionStatus = SelectedProduct == MarketProduct.Spot
+                ? "UNAVAILABLE"
+                : FormatConnectionState(_gateState, _latestGateSnapshotAt);
+            MexcConnectionStatus = _mexcClient is null
+                ? "UNAVAILABLE" : FormatConnectionState(_mexcState, _latestMexcSnapshotAt);
+            if (_client is null) ConnectionStatus = "UNAVAILABLE";
+            if (_gateClient is null) GateConnectionStatus = "UNAVAILABLE";
+            var eligibilityMask = GetScaleEligibilityMask(now);
+            if (eligibilityMask != _scaleEligibilityMask)
+            {
+                _scaleEligibilityMask = eligibilityMask;
+                RequestRenderRefresh();
+            }
+            UpdateCrossVenueComparison();
         }
-        UpdateCrossVenueComparison();
+        CatalogState = CatalogPresentationPolicy.PreserveOrMarkStale(
+            CatalogState, CatalogLoadedAt(), now, CatalogMaxAge);
+    }
+
+    private void RequestRenderRefresh() => _renderUpdateGate.Request();
+
+    private void RenderTimerOnTick(object? sender, EventArgs eventArgs)
+    {
+        if (Volatile.Read(ref _memoryWarningActive) != 0 &&
+            Interlocked.Increment(ref _warningRenderTick) % 5 != 0) return;
+        if (!_renderUpdateGate.TryConsume()) return;
+
+        lock (_marketDataSync)
+        {
+            RebuildBook();
+            ConnectionStatus = _client is null
+                ? "UNAVAILABLE" : FormatConnectionState(_bybitState, _latestSnapshotAt);
+            GateConnectionStatus = _gateClient is null
+                ? "UNAVAILABLE" : FormatConnectionState(_gateState, _latestGateSnapshotAt);
+            MexcConnectionStatus = _mexcClient is null
+                ? "UNAVAILABLE" : FormatConnectionState(_mexcState, _latestMexcSnapshotAt);
+
+            ApplyLatestBookPresentation(
+                _latestSnapshot, _bybitState,
+                value => BybitEmptyState = value,
+                value => LastPrice = value,
+                value => Spread = value);
+            ApplyLatestBookPresentation(
+                _latestGateSnapshot, _gateState,
+                value => GateEmptyState = value,
+                value => GateLastPrice = value,
+                value => GateSpread = value);
+            ApplyLatestBookPresentation(
+                _latestMexcSnapshot, _mexcState,
+                value => MexcEmptyState = value,
+                value => MexcLastPrice = value,
+                value => MexcSpread = value);
+
+            if (Interlocked.Exchange(ref _latestCluster, null) is { } cluster)
+            {
+                Replace(ClusterLevels, cluster.Levels.Take(14).Select(ToViewModel));
+                ClusterDelta = $"Δ {cluster.Delta:+0.####;-0.####;0}";
+                ClusterInterval = $"{cluster.Interval.TotalSeconds:0} СЕК";
+            }
+            UpdateCrossVenueComparison();
+        }
+    }
+
+    private static void ApplyLatestBookPresentation(
+        OrderBookSnapshot? snapshot,
+        MarketDataConnectionState state,
+        Action<string> setEmptyState,
+        Action<string> setLastPrice,
+        Action<string> setSpread)
+    {
+        if (snapshot is null)
+        {
+            setEmptyState(MarketDataEmptyState(state));
+            setLastPrice("—");
+            setSpread("—");
+            return;
+        }
+
+        setEmptyState(string.Empty);
+        setLastPrice(snapshot.BestBid is { } bid ? FormatPrice(bid) : "—");
+        setSpread(snapshot.Spread is { } spread ? FormatPrice(spread) : "—");
     }
 
     private int GetScaleEligibilityMask(DateTimeOffset now)
@@ -1070,12 +1321,19 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
     {
         token.ThrowIfCancellationRequested();
         var instrument = new CanonicalInstrument(baseAsset, quoteAsset, product);
-        _bybitTickSize = product == MarketProduct.Perpetual
+        var bybitTickSize = product == MarketProduct.Perpetual
             ? _publicCatalog.TickSize(instrument, TradingVenue.Bybit) : null;
-        _gateTickSize = product == MarketProduct.Perpetual
+        var gateTickSize = product == MarketProduct.Perpetual
             ? _publicCatalog.TickSize(instrument, TradingVenue.Gate) : null;
-        _mexcTickSize = _publicCatalog.TickSize(instrument, TradingVenue.Mexc);
-        Dispatcher.UIThread.Post(RebuildBook);
+        var mexcTickSize = _publicCatalog.TickSize(instrument, TradingVenue.Mexc);
+        lock (_marketDataSync)
+        {
+            token.ThrowIfCancellationRequested();
+            _bybitTickSize = bybitTickSize;
+            _gateTickSize = gateTickSize;
+            _mexcTickSize = mexcTickSize;
+        }
+        RequestRenderRefresh();
         return Task.CompletedTask;
     }
 
@@ -1083,11 +1341,14 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
     {
         try
         {
-            await LoadPublicCatalogsAsync().ConfigureAwait(false);
+            await LoadPublicCatalogsAsync(
+                initialLoad: true,
+                cancellationToken: _catalogLifetime.Token).ConfigureAwait(false);
             var initial = CatalogSelectionPolicy.ChooseInitial(_publicCatalog)
                 ?? throw new InvalidDataException("Public catalog union is empty.");
-            await SelectMarketAsync(initial.BaseAsset, initial.QuoteAsset, initial.Product)
-                .ConfigureAwait(false);
+            if (_selectionController.SelectedInstrument is null)
+                await SelectMarketAsync(initial.BaseAsset, initial.QuoteAsset, initial.Product,
+                    _catalogLifetime.Token, forceRefresh: false).ConfigureAwait(false);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -1097,48 +1358,206 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
                 CatalogState = "КАТАЛОГ · ОШИБКА";
             });
         }
+        finally
+        {
+            if (!_catalogLifetime.IsCancellationRequested)
+                _catalogRefreshTask = RunCatalogRefreshLoopAsync(_catalogLifetime.Token);
+        }
     }
 
-    private async Task LoadPublicCatalogsAsync()
+    private async Task RunCatalogRefreshLoopAsync(CancellationToken cancellationToken)
+    {
+        using var timer = new PeriodicTimer(CatalogRefreshCheckInterval);
+        try
+        {
+            while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false))
+            {
+                if (!PublicCatalogRefreshPolicy.ShouldRefresh(
+                        CatalogLoadedAt(), DateTimeOffset.UtcNow, CatalogRefreshAfter))
+                    continue;
+                try
+                {
+                    await LoadPublicCatalogsAsync(
+                        initialLoad: false,
+                        cancellationToken: cancellationToken).ConfigureAwait(false);
+                }
+                catch (Exception exception) when (IsRecoverableCatalogFailure(exception))
+                {
+                    await Dispatcher.UIThread.InvokeAsync(() =>
+                    {
+                        _catalogBaseState = PublicCatalogFreshness.IsFresh(
+                            CatalogLoadedAt(), DateTimeOffset.UtcNow, CatalogMaxAge)
+                            ? "КАТАЛОГ · ОШИБКА ОБНОВЛЕНИЯ"
+                            : "КАТАЛОГ · УСТАРЕЛ · ОШИБКА ОБНОВЛЕНИЯ";
+                        CatalogState = _catalogBaseState;
+                    });
+                }
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
+    }
+
+    private async Task LoadPublicCatalogsAsync(
+        bool initialLoad,
+        CancellationToken cancellationToken)
     {
         var tasks = new[]
         {
             PublicCatalogLoadIsolation.LoadBatchAsync(TradingVenue.Mexc, async () =>
             {
                 var result = await new MexcInstrumentMetadataClient(_catalogHttpClient)
-                    .GetSpotCatalogResultAsync().ConfigureAwait(false);
+                    .GetSpotCatalogResultAsync(cancellationToken).ConfigureAwait(false);
                 return new PublicCatalogBatch(result.Entries, result.InvalidEligibleCount);
             }),
             PublicCatalogLoadIsolation.LoadBatchAsync(TradingVenue.Mexc, async () =>
             {
                 var result = await new MexcContractInstrumentMetadataClient(_catalogHttpClient)
-                    .GetUsdtPerpetualCatalogResultAsync().ConfigureAwait(false);
+                    .GetUsdtPerpetualCatalogResultAsync(cancellationToken).ConfigureAwait(false);
                 return new PublicCatalogBatch(result.Entries, result.InvalidEligibleCount);
             }),
             PublicCatalogLoadIsolation.LoadBatchAsync(TradingVenue.Gate, async () =>
             {
                 var result = await new GateInstrumentMetadataClient(_catalogHttpClient)
-                    .GetUsdtPerpetualCatalogResultAsync().ConfigureAwait(false);
+                    .GetUsdtPerpetualCatalogResultAsync(cancellationToken).ConfigureAwait(false);
                 return new PublicCatalogBatch(result.Entries, result.RejectedCount);
             }),
             PublicCatalogLoadIsolation.LoadAsync(TradingVenue.Bybit, () =>
                 new BybitInstrumentMetadataClient(_catalogHttpClient)
-                .GetLinearPerpetualCatalogAsync())
+                .GetLinearPerpetualCatalogAsync(cancellationToken))
         };
         var catalogs = await Task.WhenAll(tasks).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
         var entries = catalogs.SelectMany(result => result.Entries).ToArray();
-        if (entries.Length == 0) throw new InvalidDataException("Public catalogs are unavailable.");
-        _publicCatalog.Replace(entries);
-        _catalogLoadedAt = DateTimeOffset.UtcNow;
-        await Dispatcher.UIThread.InvokeAsync(() =>
+        var now = DateTimeOffset.UtcNow;
+        var previousLoadedAt = CatalogLoadedAt();
+        var decision = initialLoad
+            ? entries.Length == 0
+                ? PublicCatalogRefreshDecision.RetainStale
+                : PublicCatalogRefreshDecision.Replace
+            : PublicCatalogRefreshPolicy.Decide(
+                previousLoadedAt, now, CatalogMaxAge, catalogs, tasks.Length,
+                entries.Length);
+        if (decision != PublicCatalogRefreshDecision.Replace)
         {
-            _catalogBaseState = catalogs.All(result => result.Succeeded &&
-                result.Entries.Count != 0 && !result.HasRejections)
-                ? "КАТАЛОГ · ГОТОВ" : "КАТАЛОГ · ЧАСТИЧНО ДОСТУПЕН";
-            CatalogState = _catalogBaseState;
-            RefreshCatalogSearch(SelectedProduct);
-        });
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                _catalogBaseState = decision == PublicCatalogRefreshDecision.RetainFresh
+                    ? "КАТАЛОГ · ОБНОВЛЕНИЕ ОТЛОЖЕНО"
+                    : previousLoadedAt is null
+                        ? "КАТАЛОГ · ОШИБКА"
+                        : "КАТАЛОГ · УСТАРЕЛ";
+                CatalogState = _catalogBaseState;
+            });
+            return;
+        }
+        if (entries.Length == 0)
+            throw new InvalidDataException("Public catalogs are unavailable.");
+        var candidateCatalog = new PublicInstrumentCatalog();
+        candidateCatalog.Replace(entries);
+
+        await _selectionLifecycleGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var active = _selectionController.SelectedInstrument;
+            var previousMapping = active is { } selected
+                ? CatalogMapping(_publicCatalog, selected) : null;
+            var nextMapping = active is { } current
+                ? CatalogMapping(candidateCatalog, current) : null;
+            var reconciliation = PublicCatalogReconciliationPolicy.Decide(
+                initialLoad, active, previousMapping ?? EmptyCatalogMapping(),
+                nextMapping ?? EmptyCatalogMapping());
+            var previousEntries = _publicCatalog.Snapshot();
+            var activeUnavailable = false;
+
+            try
+            {
+                _publicCatalog.Replace(candidateCatalog.Snapshot());
+
+                if (reconciliation == PublicCatalogReconciliationAction.Bootstrap)
+                {
+                    var bootstrap = CatalogSelectionPolicy.ChooseInitial(_publicCatalog)
+                        ?? throw new InvalidDataException("Refreshed catalog union is empty.");
+                    if (!await SelectMarketUnderLifecycleGateAsync(bootstrap.BaseAsset,
+                            bootstrap.QuoteAsset, bootstrap.Product, requestId: null,
+                            cancellationToken, forceRefresh: false).ConfigureAwait(false))
+                        throw new InvalidOperationException(
+                            "Refreshed catalog could not bootstrap a public market.");
+                }
+                else if (active is { } activeInstrument &&
+                         reconciliation != PublicCatalogReconciliationAction.None)
+                {
+                    if (reconciliation ==
+                        PublicCatalogReconciliationAction.FailClosedActive)
+                    {
+                        await _selectionController.ClearAsync(cancellationToken)
+                            .ConfigureAwait(false);
+                        activeUnavailable = true;
+                        await Dispatcher.UIThread.InvokeAsync(() =>
+                        {
+                            ApplySelectionLabels(activeInstrument);
+                            ConnectionStatus = GateConnectionStatus =
+                                MexcConnectionStatus = "UNAVAILABLE";
+                        });
+                    }
+                    else if (!await SelectMarketUnderLifecycleGateAsync(
+                                 activeInstrument.BaseAsset, activeInstrument.QuoteAsset,
+                                 activeInstrument.Product, requestId: null,
+                                 cancellationToken, forceRefresh: true).ConfigureAwait(false))
+                    {
+                        throw new InvalidOperationException(
+                            "Active public market could not be reconciled.");
+                    }
+                }
+
+                SetCatalogLoadedAt(now);
+                await Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    _catalogBaseState = catalogs.All(result => result.Succeeded &&
+                        result.Entries.Count != 0 && !result.HasRejections)
+                        ? "КАТАЛОГ · ГОТОВ" : "КАТАЛОГ · ЧАСТИЧНО ДОСТУПЕН";
+                    CatalogState = activeUnavailable
+                        ? "КАТАЛОГ · АКТИВ БОЛЬШЕ НЕДОСТУПЕН"
+                        : _catalogBaseState;
+                    RefreshCatalogSearch(SelectedProduct);
+                    if (activeUnavailable)
+                        CatalogState = "КАТАЛОГ · АКТИВ БОЛЬШЕ НЕДОСТУПЕН";
+                });
+            }
+            catch (Exception exception) when (IsRecoverableCatalogFailure(exception))
+            {
+                _publicCatalog.Replace(previousEntries);
+                SetCatalogLoadedAt(previousLoadedAt);
+                try { await _selectionController.ClearAsync(cancellationToken)
+                    .ConfigureAwait(false); }
+                catch (Exception clearException) when (
+                    IsRecoverableCatalogFailure(clearException)) { }
+                await Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    ConnectionStatus = GateConnectionStatus =
+                        MexcConnectionStatus = "UNAVAILABLE";
+                    _catalogBaseState = "КАТАЛОГ · RECONCILIATION ERROR";
+                    CatalogState = _catalogBaseState;
+                });
+                throw;
+            }
+        }
+        finally { _selectionLifecycleGate.Release(); }
     }
+
+    private static PublicCatalogEntry?[] CatalogMapping(
+        PublicInstrumentCatalog catalog,
+        CanonicalInstrument instrument) =>
+        Enum.GetValues<TradingVenue>()
+            .Select(venue => catalog.Get(instrument, venue))
+            .ToArray();
+
+    private static PublicCatalogEntry?[] EmptyCatalogMapping() =>
+        new PublicCatalogEntry?[Enum.GetValues<TradingVenue>().Length];
+
+    private static bool IsRecoverableCatalogFailure(Exception exception) =>
+        exception is not (OperationCanceledException or OutOfMemoryException or
+            StackOverflowException or AccessViolationException);
 
     private void RefreshCatalogSearch(MarketProduct product)
     {
@@ -1146,14 +1565,24 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
         foreach (var instrument in _publicCatalog.Search(product, InstrumentSearchText))
             InstrumentSearchResults.Add(instrument.PairId);
         if (!PublicCatalogFreshness.IsFresh(
-                _catalogLoadedAt, DateTimeOffset.UtcNow, CatalogMaxAge))
+                CatalogLoadedAt(), DateTimeOffset.UtcNow, CatalogMaxAge))
         {
-            CatalogState = _catalogLoadedAt is null
+            CatalogState = CatalogLoadedAt() is null
                 ? "КАТАЛОГ · ЗАГРУЗКА" : "КАТАЛОГ · УСТАРЕЛ";
             return;
         }
         CatalogState = InstrumentSearchResults.Count == 0 && !_catalogBaseState.Contains("ЗАГРУЗКА")
             ? "КАТАЛОГ · НИЧЕГО НЕ НАЙДЕНО" : _catalogBaseState;
+    }
+
+    private DateTimeOffset? CatalogLoadedAt()
+    {
+        lock (_catalogSync) return _catalogLoadedAt;
+    }
+
+    private void SetCatalogLoadedAt(DateTimeOffset? value)
+    {
+        lock (_catalogSync) _catalogLoadedAt = value;
     }
 
     private async Task RefreshCredentialStatusAsync()
@@ -1423,27 +1852,32 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
 
     private void OnSelectionResetting()
     {
-        var resetGeneration = _generation.Next();
+        long resetGeneration;
+        lock (_marketDataSync)
+        {
+            resetGeneration = _generation.Next();
+            _liquidityTrackers.ResetAll();
+            _latestSnapshot = null;
+            _latestGateSnapshot = null;
+            _latestMexcSnapshot = null;
+            _latestCluster = null;
+            _latestSnapshotAt = default;
+            _latestGateSnapshotAt = default;
+            _latestMexcSnapshotAt = default;
+            _latestLiquidity = new Dictionary<(LiquiditySide, decimal), LiquidityLevelState>();
+            _latestGateLiquidity = new Dictionary<(LiquiditySide, decimal), LiquidityLevelState>();
+            _latestMexcLiquidity = new Dictionary<(LiquiditySide, decimal), LiquidityLevelState>();
+            _bybitTickSize = null;
+            _gateTickSize = null;
+            _mexcTickSize = null;
+            _bybitState = MarketDataConnectionState.Connecting;
+            _gateState = MarketDataConnectionState.Connecting;
+            _mexcState = MarketDataConnectionState.Disconnected;
+            _scaleEligibilityMask = -1;
+        }
         DetachClients();
         _metadataLifetime.Cancel();
         _metadataLifetime.Dispose();
-        _liquidityTrackers.ResetAll();
-        _latestSnapshot = null;
-        _latestGateSnapshot = null;
-        _latestMexcSnapshot = null;
-        _latestSnapshotAt = default;
-        _latestGateSnapshotAt = default;
-        _latestMexcSnapshotAt = default;
-        _latestLiquidity = new Dictionary<(LiquiditySide, decimal), LiquidityLevelState>();
-        _latestGateLiquidity = new Dictionary<(LiquiditySide, decimal), LiquidityLevelState>();
-        _latestMexcLiquidity = new Dictionary<(LiquiditySide, decimal), LiquidityLevelState>();
-        _bybitTickSize = null;
-        _gateTickSize = null;
-        _mexcTickSize = null;
-        _bybitState = MarketDataConnectionState.Connecting;
-        _gateState = MarketDataConnectionState.Connecting;
-        _mexcState = MarketDataConnectionState.Disconnected;
-        _scaleEligibilityMask = -1;
 
         Dispatcher.UIThread.Post(() =>
         {
@@ -1460,7 +1894,7 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
             SharedScaleLabel = "НЕЗАВИСИМЫЕ ШКАЛЫ: —";
             ConsensusVerdict = "ЭВРИСТИКА: НЕТ ДАННЫХ";
             ConsensusColor = "#8B93A1";
-            UpdateCrossVenueComparison();
+            lock (_marketDataSync) UpdateCrossVenueComparison();
         });
     }
 
@@ -1507,19 +1941,15 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
 
     private void OnClusterReceived(TradeCluster cluster, long expectedGeneration)
     {
-        if (!_generation.IsCurrent(expectedGeneration)) return;
-        Dispatcher.UIThread.Post(() =>
+        lock (_marketDataSync)
         {
             if (!_generation.IsCurrent(expectedGeneration)) return;
-            Replace(
-                ClusterLevels,
-                cluster.Levels.Take(14).Select(ToViewModel));
-            ClusterDelta = $"Δ {cluster.Delta:+0.####;-0.####;0}";
-            ClusterInterval = $"{cluster.Interval.TotalSeconds:0} СЕК";
-        });
+            Interlocked.Exchange(ref _latestCluster, cluster);
+        }
+        RequestRenderRefresh();
     }
 
-    private static IEnumerable<BookLevelViewModel> ToViewModels(
+    private static IEnumerable<BookLevelPresentation> ToBookPresentations(
         IEnumerable<OrderBookLevel> source,
         IEnumerable<decimal> priceScale,
         LiquiditySide side,
@@ -1557,7 +1987,7 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
         {
             if (!levelsByPrice.TryGetValue(price, out var level))
             {
-                return new BookLevelViewModel(
+                return new BookLevelPresentation(
                     FormatPrice(price),
                     string.Empty,
                     0,
@@ -1598,7 +2028,7 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
                 _ => (string.Empty, "#8B93A1", "#00000000")
             };
 
-            return new BookLevelViewModel(
+            return new BookLevelPresentation(
                 FormatPrice(level.Price),
                 level.Quantity.ToString("0.####", CultureInfo.InvariantCulture),
                 normalized * layout.BarWidth,
@@ -1638,6 +2068,26 @@ public partial class MainViewModel : ViewModelBase, IAsyncDisposable
         foreach (var item in source)
         {
             target.Add(item);
+        }
+    }
+
+    private static void ReplaceBookLevels(
+        ObservableCollection<BookLevelViewModel> target,
+        IEnumerable<BookLevelPresentation> source)
+    {
+        var values = source.ToArray();
+        var shared = Math.Min(target.Count, values.Length);
+        for (var index = 0; index < shared; index++)
+        {
+            target[index].Apply(values[index]);
+        }
+        while (target.Count > values.Length)
+        {
+            target.RemoveAt(target.Count - 1);
+        }
+        for (var index = shared; index < values.Length; index++)
+        {
+            target.Add(new BookLevelViewModel(values[index]));
         }
     }
 

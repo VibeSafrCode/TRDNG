@@ -103,16 +103,21 @@ starter shortcuts. MEXC Spot and Gate/Bybit USDT Perpetual remain product-
 isolated; only exact catalog-proven venue symbols create public clients. No
 private or trading scope changed. Evidence: [`s1.6-evidence.md`](s1.6-evidence.md).
 
-## S1.7 — adaptive independent order books / local implementation complete
+## S1.7 — adaptive independent order books / implementation accepted, release blocked
 
 BTC/USDT is the startup/test selection. MEXC, Gate and Bybit perpetual books are
 public and independent; MEXC uses bounded REST polling. Each venue owns its
 depth, trackpad step, automatic/manual volume reference and four bar colors.
 Automatic bars normalize the visible ask and bid sides independently. The
-Founder-reported spread-row clipping has a dedicated safety gap. Release build,
-package and exact startup pass; the final post-data screenshot remains `OPEN`
-because Computer Use timed out after the books populated. Git publication and
-CI are separate pending gates. Evidence:
+Founder-reported spread-row clipping has a dedicated safety gap. Settings now
+persist through bounded atomic writes. The final Release build, 367/367 tests,
+one-million-cycle replay, package/codesign and guarded five-minute run pass.
+The next 15-minute gate stopped fail-closed on host-wide swap growth while the
+app footprint stayed near 190 MiB; 30-minute/two-hour gates were not started.
+Screenshot acceptance is `BLOCKED_ENVIRONMENT` because macOS denied display
+capture. PR publication/CI and current-history recovery verification remain
+closure gates; merge/release require the visual and quiet-host soak gates or an
+explicit Founder waiver. Evidence:
 [`s1.7-adaptive-orderbooks-evidence.md`](s1.7-adaptive-orderbooks-evidence.md).
 
 MEXC Futures public books допустимы. Private futures trading остаётся
@@ -194,9 +199,9 @@ cannot establish the later two-hour release gate. Evidence:
 GitHub CI `33302487008` passed the Release build and 327/327 tests; pull request
 `#9` merged as `2e7d9218c2db462bd0b45ec9f372462b1945cd00`.
 
-The next product sprint, not part of PR-04, must address the owner's manual
-large-monitor review: adaptive full-height venue books, per-book gear and
-auto/manual depth/bar scaling and customizable colors, visible-volume-normalized
-bars with the owner's yellow/red ask and blue/green bid defaults, BTC as the
-startup/test selection, and non-empty Gate/MEXC books for an exact available
-market.
+S1.7 implemented the owner's large-monitor scope after PR-04: adaptive
+full-height venue books, per-book controls, auto/manual depth and bar scaling,
+customizable colors, visible-volume-normalized bars with the owner's
+yellow/red ask and blue/green bid defaults, BTC startup/test selection and exact
+public-book routing for MEXC/Gate/Bybit. Product expansion remains deferred;
+only the closure gates recorded above are active.

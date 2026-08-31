@@ -57,6 +57,11 @@ public sealed class PublicInstrumentCatalog
             ? entry : null;
     }
 
+    public IReadOnlyList<PublicCatalogEntry> Snapshot()
+    {
+        lock (_sync) return _entries.Values.ToArray();
+    }
+
     public IReadOnlyList<CanonicalInstrument> Search(MarketProduct product, string query,
         int limit = MaxSearchResults)
     {
@@ -82,6 +87,83 @@ public static class PublicCatalogFreshness
 {
     public static bool IsFresh(DateTimeOffset? loadedAt, DateTimeOffset now, TimeSpan maxAge) =>
         maxAge > TimeSpan.Zero && loadedAt is { } loaded && now >= loaded && now - loaded <= maxAge;
+}
+
+public enum PublicCatalogRefreshDecision
+{
+    Replace,
+    RetainFresh,
+    RetainStale
+}
+
+public enum PublicCatalogReconciliationAction
+{
+    None,
+    Bootstrap,
+    RebuildActive,
+    FailClosedActive
+}
+
+public static class PublicCatalogReconciliationPolicy
+{
+    public static PublicCatalogReconciliationAction Decide(
+        bool initialLoad,
+        CanonicalInstrument? active,
+        IReadOnlyList<PublicCatalogEntry?> previous,
+        IReadOnlyList<PublicCatalogEntry?> current)
+    {
+        ArgumentNullException.ThrowIfNull(previous);
+        ArgumentNullException.ThrowIfNull(current);
+        if (previous.Count != current.Count)
+            throw new ArgumentException("Catalog mappings must have equal lengths.");
+        if (active is null)
+            return initialLoad
+                ? PublicCatalogReconciliationAction.None
+                : PublicCatalogReconciliationAction.Bootstrap;
+        if (previous.SequenceEqual(current))
+            return PublicCatalogReconciliationAction.None;
+        return current.All(entry => entry is null)
+            ? PublicCatalogReconciliationAction.FailClosedActive
+            : PublicCatalogReconciliationAction.RebuildActive;
+    }
+}
+
+public static class PublicCatalogRefreshPolicy
+{
+    public static bool ShouldRefresh(
+        DateTimeOffset? loadedAt,
+        DateTimeOffset now,
+        TimeSpan refreshAfter)
+    {
+        if (refreshAfter <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(refreshAfter));
+        return loadedAt is not { } loaded || now < loaded || now - loaded >= refreshAfter;
+    }
+
+    public static PublicCatalogRefreshDecision Decide(
+        DateTimeOffset? loadedAt,
+        DateTimeOffset now,
+        TimeSpan maxAge,
+        IReadOnlyList<VenueCatalogLoadResult> results,
+        int expectedSourceCount,
+        int candidateEntryCount)
+    {
+        ArgumentNullException.ThrowIfNull(results);
+        if (maxAge <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(maxAge));
+        if (expectedSourceCount <= 0)
+            throw new ArgumentOutOfRangeException(nameof(expectedSourceCount));
+        if (candidateEntryCount < 0)
+            throw new ArgumentOutOfRangeException(nameof(candidateEntryCount));
+        if (loadedAt is null && candidateEntryCount > 0)
+            return PublicCatalogRefreshDecision.Replace;
+        if (results.Count == expectedSourceCount &&
+            results.All(result => result.Succeeded && result.Entries.Count != 0))
+            return PublicCatalogRefreshDecision.Replace;
+        return PublicCatalogFreshness.IsFresh(loadedAt, now, maxAge)
+            ? PublicCatalogRefreshDecision.RetainFresh
+            : PublicCatalogRefreshDecision.RetainStale;
+    }
 }
 
 public static class CatalogPresentationPolicy

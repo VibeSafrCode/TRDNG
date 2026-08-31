@@ -72,6 +72,13 @@ evidence still comes from the exact signed app with `footprint` and `vmmap`;
 missing runtime private-memory counters are represented as unavailable rather
 than zero.
 
+The live UI is also bounded: producers replace one latest snapshot per venue and
+set one global dirty bit; a UI-owned timer renders at most 10 Hz. Existing row
+view models are updated in place instead of clearing/recreating every visual row.
+Every macOS GUI/soak launch must use the exact-hash process-tree watchdog. The
+canonical limits, scale tiers and system-pressure rules are in
+[Performance safety](PERFORMANCE-SAFETY.md).
+
 ## State and lifecycle
 
 - Selection is canonical `asset + product`, generation-scoped and latest-request-wins; old callbacks cannot populate a new selection.
@@ -92,3 +99,6 @@ than zero.
 - [PR-03 bounded HTTP evidence](pr03-bounded-http-evidence.md)
 - [PR-04 memory observability evidence](pr04-memory-soak-evidence.md)
 - [Memory soak runbook](memory-soak-runbook.md)
+- [Performance and runtime-safety contract](PERFORMANCE-SAFETY.md)
+- [P0 GUI memory incident evidence](p0-memory-incident-evidence.md)
+- [S1.7 and cleanup closure evidence](closure-cleanup-evidence.md)

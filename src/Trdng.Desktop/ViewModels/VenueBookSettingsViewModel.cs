@@ -12,7 +12,8 @@ public partial class VenueBookSettingsViewModel : ObservableObject
 
     public VenueBookSettingsViewModel(TradingVenue venue, int maximumDepth)
     {
-        if (maximumDepth is < BookDisplayPolicy.MinimumDepth or > 1_000)
+        if (maximumDepth is < BookDisplayPolicy.MinimumDepth or >
+            BookDisplayPolicy.MaximumDepthPerSide)
             throw new ArgumentOutOfRangeException(nameof(maximumDepth));
         Venue = venue;
         MaximumDepth = maximumDepth;
@@ -54,6 +55,9 @@ public partial class VenueBookSettingsViewModel : ObservableObject
 
     [ObservableProperty]
     public partial string LargestBidColor { get; set; }
+
+    [ObservableProperty]
+    public partial string PersistenceState { get; set; } = "НАСТРОЙКИ · ПО УМОЛЧАНИЮ";
 
     public BookDisplayLayout Layout => BookDisplayPolicy.Resolve(
         AutomaticDepth,
@@ -115,6 +119,41 @@ public partial class VenueBookSettingsViewModel : ObservableObject
         NotifyChanged();
     }
 
+    public BookDisplaySettingsSnapshot Snapshot() => new(
+        Venue,
+        AutomaticDepth,
+        (int)ManualDepth,
+        (int)GestureStep,
+        AutomaticVolumeScale,
+        ManualVolumeReference,
+        AskColor,
+        LargestAskColor,
+        BidColor,
+        LargestBidColor);
+
+    public void Apply(BookDisplaySettingsSnapshot settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        if (settings.Venue != Venue ||
+            !BookDisplaySettingsValidation.IsValid(settings))
+            throw new InvalidDataException("Book display settings are invalid.");
+        _normalizing = true;
+        try
+        {
+            AutomaticDepth = settings.AutomaticDepth;
+            ManualDepth = settings.ManualDepth;
+            GestureStep = settings.GestureStep;
+            AutomaticVolumeScale = settings.AutomaticVolumeScale;
+            ManualVolumeReference = settings.ManualVolumeReference;
+            AskColor = settings.AskColor;
+            LargestAskColor = settings.LargestAskColor;
+            BidColor = settings.BidColor;
+            LargestBidColor = settings.LargestBidColor;
+        }
+        finally { _normalizing = false; }
+        NotifyChanged();
+    }
+
     partial void OnAutomaticDepthChanged(bool value) => NotifyChanged();
     partial void OnAutomaticVolumeScaleChanged(bool value) => NotifyChanged();
 
@@ -143,9 +182,11 @@ public partial class VenueBookSettingsViewModel : ObservableObject
 
     partial void OnManualVolumeReferenceChanged(decimal value)
     {
-        if (value <= 0)
+        var normalized = Math.Clamp(value, 0.00000001m,
+            BookDisplayPolicy.MaximumManualVolumeReference);
+        if (value != normalized)
         {
-            ManualVolumeReference = 1;
+            ManualVolumeReference = normalized;
             return;
         }
         NotifyChanged();

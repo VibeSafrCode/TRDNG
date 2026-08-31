@@ -80,6 +80,8 @@
           </Grid>
           <TextBlock Text="{Binding PaletteState}" Foreground="#F5C96A"
                      FontSize="10" TextWrapping="Wrap" />
+          <TextBlock Text="{Binding PersistenceState}" Foreground="#AEB6C3"
+                     FontSize="10" TextWrapping="Wrap" />
           <Button Content="ВЕРНУТЬ МОИ ЦВЕТА" Tag="{Binding Venue}"
                   Click="ResetBookPalette_Click" Padding="8,6" />
         </StackPanel>
@@ -318,7 +320,10 @@
     </Grid>
 
     <Border Grid.Row="2" BorderBrush="#242830" BorderThickness="0,1,0,0">
-      <TextBlock Text="{Binding SharedScaleLabel}" Foreground="#8B93A1" FontSize="11" Margin="16,0" VerticalAlignment="Center" />
+      <Grid Margin="16,0" ColumnDefinitions="*,Auto">
+        <TextBlock Text="{Binding SharedScaleLabel}" Foreground="#8B93A1" FontSize="11" VerticalAlignment="Center" />
+        <TextBlock Grid.Column="1" Text="{Binding RuntimeSafetyStatus}" Foreground="#FFD60A" FontSize="11" VerticalAlignment="Center" />
+      </Grid>
     </Border>
   </Grid>
 </Window>

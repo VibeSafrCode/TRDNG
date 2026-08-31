@@ -1,14 +1,15 @@
 # GitHub readiness evidence
 
-Status: ACCEPTED / PUBLISHED
-Date: 2026-08-19
-Repository: `https://github.com/VibeSafrCode/TRDNG` (PRIVATE, no license)
+Status: ACCEPTED / PUBLISHED; closure update in progress
+Date: 2026-08-19; current visibility rechecked 2026-08-31
+Repository: `https://github.com/VibeSafrCode/TRDNG` (PUBLIC, no license)
 Root commit: `5780ef66b20143e918e1d88399bfe985b0c1287e`
 Accepted portable-test fix: `3e9d9e2cfc1ab0c3dffc54aa6cb3646e4c374966`
 
 ## Published result
 
-The private repository was recreated from a terminal-only root. Fresh-clone
+The repository was recreated privately from a terminal-only root and was later
+made public by explicit Founder authorization. Fresh-clone
 history contains one root line before the accepted portable-test fix, and fresh
 tracked path/content scans contain zero excluded local-only terms. The local
 worktree was clean after publication.
@@ -19,8 +20,13 @@ operations remain outside this publication gate.
 ## Recovery evidence
 
 - External local archive: 12 MiB; directory comparison: PASS.
-- Complete pre-separation Git bundle: verified complete.
-- Restore from either recovery point: NOT RUN.
+- Complete pre-separation Git bundle: verified complete, but historical only.
+- Isolated restore from that historical bundle: PASS on 2026-08-31; `git fsck
+  --full --strict`, restored HEAD and clean worktree verified. It does not back
+  up the current terminal-only history. See
+  [`recovery-restore-evidence.md`](recovery-restore-evidence.md).
+- Current terminal-only recovery bundle/restore: PENDING in the closure sprint.
+- Restore from the separate directory archive: NOT RUN.
 - Older commit identifiers retained in historical sprint documents refer to
   pre-separation local history, not the recreated remote ancestry.
 
@@ -33,7 +39,9 @@ operations remain outside this publication gate.
 - No credentials, live tests, private endpoints, artifact upload, release or
   deployment permissions.
 - Official Actions remain pinned to reviewed full commit SHAs; Dependabot
-  monitors updates.
+  monitors updates. The active closure branch replaces the deprecated
+  setup-dotnet action with the repository SDK inside a digest-pinned .NET
+  container; publication evidence remains pending until that branch CI passes.
 
 ## Repository checks
 

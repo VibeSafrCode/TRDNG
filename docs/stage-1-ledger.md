@@ -316,13 +316,15 @@ Baseline зафиксирован: 2026-08-02 11:31 +05:00.
 
 ## Terminal repository publication — ACCEPTED
 
-- Private, no-license repository recreated from terminal-only root
+- Repository was initially recreated private and no-license from terminal-only root
   `5780ef66b20143e918e1d88399bfe985b0c1287e`.
 - Portable deterministic-test fix published at
   `3e9d9e2cfc1ab0c3dffc54aa6cb3646e4c374966`.
 - CI run `32235655100`: Release build PASS; official tests 245/245 PASS.
 - Fresh-clone excluded path/content scans: zero; worktree clean.
-- Recovery evidence exists externally; restore remains NOT RUN.
+- At publication time restore was NOT RUN. Superseded status: historical
+  pre-separation bundle restore passed on 2026-08-31; current terminal-only
+  recovery remains pending the accepted closure commit.
 
 ## In-app Keychain entry — ACCEPTED / PUBLISHED
 
@@ -508,7 +510,7 @@ Baseline зафиксирован: 2026-08-02 11:31 +05:00.
   PASS. Merged to `main` as
   `2e7d9218c2db462bd0b45ec9f372462b1945cd00`.
 
-## S1.7 adaptive independent books — LOCAL COMPLETE / AUDIT PENDING
+## S1.7 adaptive books + cleanup — IMPLEMENTATION ACCEPTED / RELEASE BLOCKED
 
 - Branch `codex/adaptive-orderbooks`, baseline
   `b7b0e7060f4c00d7fcb072d78f02dfb59be2ee9e`.
@@ -517,14 +519,26 @@ Baseline зафиксирован: 2026-08-02 11:31 +05:00.
   levels respectively.
 - Per-book auto/manual depth, trackpad step, manual/automatic volume reference
   and four colors are implemented. Visible ask/bid maxima normalize separately.
+- Closure adds bounded local settings persistence, transactional catalog refresh
+  with active-client reconciliation, graceful-close flushing, measured MEXC
+  polling and the P0 latest-wins 10 Hz/in-place-row memory correction.
 - Founder-reported spread overlap was corrected with reserved layout height and
   explicit four-pixel gaps above/below the spread strip.
-- Targeted assembly compile and final Release solution build: PASS, 0 warnings/
-  errors. One official local VSTest attempt was IPC-blocked before runtime and
-  not retried.
-- Final app package/codesign and exact BTC startup: PASS. Final post-data visual
-  acceptance remains OPEN because Computer Use timed out after population.
+- Independent P0/P1 audit: PASS. Final Release solution build: PASS, 0
+  warnings/errors. Official local suite: 367/367 PASS. Final one-million-cycle
+  replay and all structural scale tiers: PASS.
+- Final app package/codesign: PASS. Executable SHA-256
+  `1d93a3a074aa0bfdf36e5a49091a9b1acf9d51ecaf2790678fa3de4ba6b25e90`.
+  Five-minute guarded gate PASS; the next 15-minute attempt was stopped after
+  6m25s by system swap while app footprint stayed near 190 MiB. Classification:
+  `BLOCKED_ENVIRONMENT`; 30m/2h were not started.
+- Visual screenshot acceptance is `BLOCKED_ENVIRONMENT` after the single
+  Screen Recording capture failed; TCC was not changed or retried.
 - Evidence: [`s1.7-adaptive-orderbooks-evidence.md`](s1.7-adaptive-orderbooks-evidence.md).
-  Audit packet: [`audit/S17_ADAPTIVE_ORDERBOOKS_AUDIT_PACKET.md`](audit/S17_ADAPTIVE_ORDERBOOKS_AUDIT_PACKET.md).
-- Commit, push, PR, CI, merge, tag, notarization and release: NOT RUN. Git
-  publication remains a separate Founder gate.
+  Closure: [`closure-cleanup-evidence.md`](closure-cleanup-evidence.md).
+  Closure audit packet: [`audit/CLOSURE_CLEANUP_AUDIT_PACKET.md`](audit/CLOSURE_CLEANUP_AUDIT_PACKET.md).
+  The earlier [`audit/S17_ADAPTIVE_ORDERBOOKS_AUDIT_PACKET.md`](audit/S17_ADAPTIVE_ORDERBOOKS_AUDIT_PACKET.md)
+  is retained as superseded historical review scope.
+- PR #10 commit/push/CI are pending this closure. Merge, tag and release remain
+  blocked on visual and quiet-host 15/30/120-minute gates. No private API,
+  `/order/test`, order or money action ran.
