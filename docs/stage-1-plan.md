@@ -115,9 +115,9 @@ one-million-cycle replay, package/codesign and guarded five-minute run pass.
 The next 15-minute gate stopped fail-closed on host-wide swap growth while the
 app footprint stayed near 190 MiB; 30-minute/two-hour gates were not started.
 Screenshot acceptance is `BLOCKED_ENVIRONMENT` because macOS denied display
-capture. Current terminal recovery verification now passes; PR publication/CI
-remain closure gates. Merge/release require the visual and quiet-host soak gates
-or an explicit Founder waiver. Evidence:
+capture. Current terminal recovery verification, PR publication and corrected
+GitHub CI now pass. Merge/release still require the visual and quiet-host soak
+gates or an explicit Founder waiver. Evidence:
 [`s1.7-adaptive-orderbooks-evidence.md`](s1.7-adaptive-orderbooks-evidence.md).
 
 MEXC Futures public books допустимы. Private futures trading остаётся

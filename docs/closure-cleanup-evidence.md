@@ -64,12 +64,18 @@ Date: 2026-08-31. Branch: `codex/adaptive-orderbooks`. Status:
   30-minute and two-hour runs were not started after the 15-minute prerequisite
   stopped.
 - Closure implementation commit:
-  `fb252bfa0afda8f57d51202d74baeb29e8954d79`. Its current terminal-only Git
+  `fb252bfa0afda8f57d51202d74baeb29e8954d79`. Published branch head after the
+  recovery-doc record and audited CI correction produced verified code/CI head:
+  `83e92ba4aca685abc21888cb24317a2c611eb39d`. Its current terminal-only Git
   bundle passed verification, isolated clone, strict fsck, exact HEAD and clean
   worktree checks. Exact artifact identity and retention are recorded in
   [`recovery-restore-evidence.md`](recovery-restore-evidence.md). The already
   verified pre-separation bundle remains historical only.
-- PR #10 publication and one GitHub CI run are pending. Merge, tag and release
+- PR #10 is updated. The first closure run `33392273068` exposed a CI-only
+  tmpfs-capacity error before compilation; the independently audited correction
+  preserved the 2 GiB/no-swap envelope and moved only package/tool caches to
+  job-scoped runner temp. Corrected run `33392591048`: Release build PASS,
+  367/367 tests PASS and one-million-cycle replay PASS. Merge, tag and release
   remain blocked until the visual and soak gates pass or the Founder explicitly
   accepts a documented waiver.
 

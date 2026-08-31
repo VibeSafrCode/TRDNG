@@ -4,14 +4,16 @@ Date: 2026-08-31. Status: `PASS / CURRENT TERMINAL IMPLEMENTATION COMMIT`.
 
 ## Current terminal-only recovery artifact
 
-- Covered commit: `fb252bfa0afda8f57d51202d74baeb29e8954d79`
-  (`fix: close adaptive order-book stability debt`).
+- Covered verified code/CI head: `83e92ba4aca685abc21888cb24317a2c611eb39d`.
+  It includes implementation commit
+  `fb252bfa0afda8f57d51202d74baeb29e8954d79`, the recovery-doc record and the
+  independently audited CI tmpfs correction.
 - Repository-relative locator (ignored, local-only):
-  `artifacts/backups/trdng-terminal-closure-fb252bf.bundle`.
-- Created and verified at `2026-08-31T12:29:34Z`.
-- Size: `4253174` bytes; permissions: `0600` (`-rw-------`).
+  `artifacts/backups/trdng-terminal-closure-83e92ba.bundle`.
+- Created and verified at `2026-08-31T12:38:27Z`.
+- Size: `4255900` bytes; permissions: `0600` (`-rw-------`).
 - SHA-256:
-  `efaecd333d9e4113cb29e974793d8684079ade28f37413d9156d9ad56d547a9a`.
+  `af37d24bc2ca9c809538e9868810140245458355fe271fe64696bf32c5a96dd4`.
 - Retention: preserve through the closure/release decision and replace only
   with a newer independently restored terminal-only bundle.
 - `git bundle verify`: PASS; complete history, exact branch ref.
@@ -19,8 +21,9 @@ Date: 2026-08-31. Status: `PASS / CURRENT TERMINAL IMPLEMENTATION COMMIT`.
 - `git fsck --full --strict`: PASS; exact restored HEAD match; clean restored
   worktree.
 
-This artifact covers the implementation commit exactly. The later docs-only
-record of this verification is intentionally not inside that same bundle.
+This artifact covers the verified code/CI head exactly. The later docs-only
+factual record of this verification is intentionally not inside that same
+bundle.
 
 ## Historical pre-separation artifact
 

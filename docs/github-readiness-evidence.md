@@ -25,8 +25,8 @@ operations remain outside this publication gate.
   --full --strict`, restored HEAD and clean worktree verified. It does not back
   up the current terminal-only history. See
   [`recovery-restore-evidence.md`](recovery-restore-evidence.md).
-- Current terminal-only recovery bundle/restore: PASS for closure implementation
-  commit `fb252bfa0afda8f57d51202d74baeb29e8954d79`; exact local-only artifact,
+- Current terminal-only recovery bundle/restore: PASS for published verified
+  code/CI head `83e92ba4aca685abc21888cb24317a2c611eb39d`; exact local-only artifact,
   checksum, retention and isolated restore evidence are recorded in
   [`recovery-restore-evidence.md`](recovery-restore-evidence.md).
 - Restore from the separate directory archive: NOT RUN.
@@ -42,9 +42,10 @@ operations remain outside this publication gate.
 - No credentials, live tests, private endpoints, artifact upload, release or
   deployment permissions.
 - Official Actions remain pinned to reviewed full commit SHAs; Dependabot
-  monitors updates. The active closure branch replaces the deprecated
-  setup-dotnet action with the repository SDK inside a digest-pinned .NET
-  container; publication evidence remains pending until that branch CI passes.
+  monitors updates. The closure branch replaces the deprecated setup-dotnet
+  action with the repository SDK inside a digest-pinned .NET container. Corrected
+  closure run `33392591048` passed Release build, 367/367 tests and the bounded
+  one-million-cycle replay inside the 2 GiB/no-swap cgroup.
 
 ## Repository checks
 

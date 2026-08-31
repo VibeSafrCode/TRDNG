@@ -11,13 +11,13 @@
 | External archive | VERIFIED | 12 MiB; directory comparison PASS |
 | Pre-separation Git bundle | VERIFIED COMPLETE | Full bundle verified before clean recreation |
 | Historical restore verification | VERIFIED | Pre-separation bundle cloned in isolation; full strict fsck, exact historical HEAD and clean worktree PASS on 2026-08-31 |
-| Current terminal restore verification | VERIFIED | Bundle for `fb252bfa0afda8f57d51202d74baeb29e8954d79`; verify, isolated clone, strict fsck, exact HEAD and clean worktree PASS |
+| Current terminal restore verification | VERIFIED | Bundle for `83e92ba4aca685abc21888cb24317a2c611eb39d`; verify, isolated clone, strict fsck, exact HEAD and clean worktree PASS |
 | Repository root | VERIFIED | `5780ef66b20143e918e1d88399bfe985b0c1287e` |
 | Current main / origin | VERIFIED | PR-04 merged as `2e7d9218c2db462bd0b45ec9f372462b1945cd00` |
-| Current working branch | VERIFIED | `codex/adaptive-orderbooks`; closure implementation commit `fb252bfa0afda8f57d51202d74baeb29e8954d79` |
+| Verified code/CI head | VERIFIED PUBLISHED | `codex/adaptive-orderbooks`; `83e92ba4aca685abc21888cb24317a2c611eb39d` pushed to PR #10; later factual docs do not change code |
 | GitHub publication | VERIFIED PUBLIC | Read-only check 2026-08-31: `PUBLIC`, default branch `main`; no visibility change performed in this closure |
 | CI acceptance | VERIFIED | PR-04 run `33302487008`: Release build PASS; official tests 327/327 PASS |
-| Closure CI | PENDING | One PR #10 run required after accepted closure push |
+| Closure CI | VERIFIED | Corrected run `33392591048`: Release build PASS; 367/367 tests PASS; one-million-cycle replay PASS |
 | Older sprint commit IDs | PRE-SEPARATION LOCAL HISTORY | IDs in older evidence documents are preserved by the verified bundle and are not ancestors of the recreated root |
 | Tag / release | BLOCKED | Closure authority exists, but visual and 15/30/120-minute soak gates have not passed |
 
@@ -123,14 +123,20 @@ Restore details: [`recovery-restore-evidence.md`](recovery-restore-evidence.md).
   system swap; app peak/final footprint 199,281,728/190,204,992 bytes, cleanup
   PASS. 30m/2h NOT RUN after failed prerequisite.
 - Screenshot visual gate BLOCKED_ENVIRONMENT. Closure implementation commit:
-  `fb252bfa0afda8f57d51202d74baeb29e8954d79`.
+  `fb252bfa0afda8f57d51202d74baeb29e8954d79`; published branch head after
+  recovery docs and CI correction:
+  `83e92ba4aca685abc21888cb24317a2c611eb39d`.
 - Current terminal-only bundle:
-  `artifacts/backups/trdng-terminal-closure-fb252bf.bundle`; 4,253,174 bytes;
-  SHA-256 `efaecd333d9e4113cb29e974793d8684079ade28f37413d9156d9ad56d547a9a`;
+  `artifacts/backups/trdng-terminal-closure-83e92ba.bundle`; 4,255,900 bytes;
+  SHA-256 `af37d24bc2ca9c809538e9868810140245458355fe271fe64696bf32c5a96dd4`;
   permissions `0600`; bundle verify, isolated clone, strict fsck, exact HEAD and
   clean worktree PASS. Retain through the closure/release decision.
-- Push/CI and PR update remain pending. Merge, notarization, tag and release
-  remain BLOCKED.
+- First closure CI run `33392273068` failed before compilation because NuGet
+  packages exhausted the deliberately small `/tmp` tmpfs. The audited fix moved
+  only tool/package caches to job-scoped runner temp without weakening the
+  2 GiB/no-swap cgroup. Corrected run `33392591048`: build PASS, 367/367 tests
+  PASS and one-million-cycle replay PASS. PR #10 is updated. Merge,
+  notarization, tag and release remain BLOCKED.
 
 ## Формат backup-записи
 

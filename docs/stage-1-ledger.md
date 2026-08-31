@@ -539,6 +539,9 @@ Baseline зафиксирован: 2026-08-02 11:31 +05:00.
   Closure audit packet: [`audit/CLOSURE_CLEANUP_AUDIT_PACKET.md`](audit/CLOSURE_CLEANUP_AUDIT_PACKET.md).
   The earlier [`audit/S17_ADAPTIVE_ORDERBOOKS_AUDIT_PACKET.md`](audit/S17_ADAPTIVE_ORDERBOOKS_AUDIT_PACKET.md)
   is retained as superseded historical review scope.
-- PR #10 commit/push/CI are pending this closure. Merge, tag and release remain
-  blocked on visual and quiet-host 15/30/120-minute gates. No private API,
+- Implementation commit `fb252bf`, recovery docs `b1c927d` and audited CI fix
+  `83e92ba` are pushed to PR #10. Corrected CI run `33392591048`: Release build,
+  367/367 tests and one-million-cycle replay PASS. Current terminal-only bundle
+  restore for head `83e92ba` PASS. Merge, tag and release remain blocked on
+  visual and quiet-host 15/30/120-minute gates. No private API,
   `/order/test`, order or money action ran.
