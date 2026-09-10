@@ -60,6 +60,14 @@ growth while app footprint remained below 208 MiB; the two-hour release soak
 was not started because its prerequisite did not pass. Review this as an
 environment gate, not as release PASS or permission to weaken the watchdog.
 
+Founder decision, 2026-09-10: the remaining current-package GUI and guarded
+5/15/30/120-minute checks are explicitly waived for this S1.7 prerelease.
+The release status is `ACCEPTED_WITH_RISK`; runtime outcomes remain unchanged.
+This removes that approval blocker, with green CI, existing independent audit
+and verified package/recovery retained as merge/publication requirements.
+See [release acceptance](../s1.7-release.md) for exact scope and residual debt.
+The waiver does not change runtime guards or authorize private trading.
+
 ## Requested output
 
 Return P0/P1/P2 findings with file/line evidence. Separate release blockers from

@@ -13,9 +13,9 @@ pending. Fresh-clone path/content scans and CI are accepted.
 
 A 12 MiB external local archive and verified complete pre-separation Git bundle
 preserve historical recovery evidence. An isolated restore from that historical
-bundle passed on 2026-08-31, but it does not recover current terminal-only
-history; the current bundle gate and separate directory-archive restore remain
-open. Keep secret
+bundle passed on 2026-08-31. Current terminal-only code-head recovery also passed;
+see [recovery evidence](recovery-restore-evidence.md). The separate historical
+directory archive was not restored. Keep secret
 scanning, push protection, Dependabot alerts and updates enabled on the remote.
 
 Protect `main` with pull requests, required CI, conversation resolution, no

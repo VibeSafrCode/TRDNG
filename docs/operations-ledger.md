@@ -14,15 +14,28 @@
 | Prior-head terminal restore verification | VERIFIED | Bundle for `83e92ba4aca685abc21888cb24317a2c611eb39d`; superseded but retained through closure decision |
 | Current code-head terminal restore verification | VERIFIED | Bundle for `9af7e0beb64a8bee7d311048ecde21f3519b01e5`; verify, isolated clone, strict fsck, exact HEAD and clean worktree PASS; later factual docs do not change code |
 | Repository root | VERIFIED | `5780ef66b20143e918e1d88399bfe985b0c1287e` |
-| Current main / origin | VERIFIED | PR-04 merged as `2e7d9218c2db462bd0b45ec9f372462b1945cd00` |
+| Pre-release main | VERIFIED 2026-09-10 | `b7b0e7060f4c00d7fcb072d78f02dfb59be2ee9e`; subsequent merge revision is recorded by PR #10 and release tag |
 | Verified code/CI head | VERIFIED PUBLISHED | `codex/adaptive-orderbooks`; accessibility correction `9af7e0beb64a8bee7d311048ecde21f3519b01e5` pushed to PR #10 |
 | GitHub publication | VERIFIED PUBLIC | Read-only check 2026-08-31: `PUBLIC`, default branch `main`; no visibility change performed in this closure |
 | CI acceptance | VERIFIED | PR-04 run `33302487008`: Release build PASS; official tests 327/327 PASS |
 | Closure CI | VERIFIED | Latest run `34470736716`: Release build PASS; 367/367 tests PASS; one-million-cycle replay PASS |
 | Older sprint commit IDs | PRE-SEPARATION LOCAL HISTORY | IDs in older evidence documents are preserved by the verified bundle and are not ancestors of the recreated root |
-| Tag / release | BLOCKED | Predecessor package `6474cdf...` visual and clean 15-minute gates PASS; current package GUI/soak is not PASS because host-wide swap growth stops it, so 30/120-minute prerequisites and release remain blocked |
+| Tag / release acceptance | ACCEPTED_WITH_RISK; PUBLICATION PENDING | Founder waived remaining current-package GUI/soak checks on 2026-09-10; planned prerelease `v0.1.0-s1.7` still requires final CI, merge, tag and upload verification |
 
 Restore details: [`recovery-restore-evidence.md`](recovery-restore-evidence.md).
+
+## 2026-09-10 Founder waiver and prerelease acceptance
+
+The Founder instructed «давай пропустим этот этап» after the current-package
+GUI and 5/15/30/120-minute requirements were explained. Their release-blocking
+status is superseded for S1.7 only; evidence remains unproven/blocked/not run.
+The below historical swap stops are not relabelled PASS. Normal runtime guards
+and thresholds are unchanged. Package archive extraction/signature/content and
+code-head recovery verification pass. Exact hashes, accepted debt and rollback
+are recorded in [release acceptance](s1.7-release.md). Publication remains
+pending; the eventual [PR #10](https://github.com/VibeSafrCode/TRDNG/pull/10)
+merge and planned [prerelease](https://github.com/VibeSafrCode/TRDNG/releases/tag/v0.1.0-s1.7)
+must be verified before a completed publication is recorded.
 
 ## 2026-08-31 / 2026-09-10 S1.7 correction package
 
@@ -47,8 +60,8 @@ Restore details: [`recovery-restore-evidence.md`](recovery-restore-evidence.md).
   mode `0600`, SHA-256
   `b304ce6a967df7f4f2ccaa422d83ae37ceca97e87c710f1422d974ac772f200d`;
   bundle verify, isolated clone, strict fsck, exact HEAD and clean worktree PASS.
-  Merge/release remain pending until the memory gate can run in a clean macOS
-  session.
+  At that checkpoint merge/release waited for a clean macOS session; this
+  requirement is superseded by the release-specific Founder waiver above.
 - The current package guarded visual attempt stopped after 10 seconds on
   host-wide swap growth at 158,485,440 bytes app footprint, before visual input.
   Cleanup PASS. Current-hash GUI and 15/30/120-minute gates are therefore not

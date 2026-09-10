@@ -12,7 +12,7 @@ Baseline зафиксирован: 2026-08-02 11:31 +05:00.
 
 | Объект | Подтверждённый факт | Статус |
 |---|---|---|
-| Workspace | Корень `/Users/safr.nikita/Documents/AI OS SAFR/02 Projects/TRDNG` доступен; исходники, тестовые проекты, документы и локальные артефакты присутствуют | VERIFIED |
+| Workspace | Локальный корень репозитория `TRDNG` доступен; исходники, тестовые проекты, документы и локальные артефакты присутствуют | VERIFIED |
 | Platform | SDK `10.0.302`, macOS arm64 | VERIFIED |
 | Solution | `Trdng.slnx` перечисляет четыре проекта `src` и один тестовый проект | VERIFIED |
 | Git baseline | В корне нет подтверждённой Git metadata; branch, HEAD, status и diff определить нельзя | BLOCKED |
@@ -574,11 +574,26 @@ Baseline зафиксирован: 2026-08-02 11:31 +05:00.
   2026-09-10 attempt stopped after approximately 20s; a controlled retry after
   twelve unchanged no-app swap observations stopped after 10s. App footprint
   stayed below 208 MiB and owned-process cleanup passed each time. 120m
-  `NOT RUN`; merge/release stay blocked without a clean host session or an
-  explicit documented waiver.
+  `NOT RUN`; at that checkpoint merge/release required a clean host session
+  or an explicit documented waiver, subsequently granted below.
 - Current-hash 5m GUI attempt also stopped after 10s on `SYSTEM_SWAP_GROWTH`
   before visual input, with app footprint 158,485,440 bytes and cleanup PASS.
   Current code-head recovery bundle `trdng-terminal-closure-9af7e0b.bundle`:
   4,270,248 bytes, mode 0600, SHA-256
   `b304ce6a967df7f4f2ccaa422d83ae37ceca97e87c710f1422d974ac772f200d`;
   verify/isolated clone/fsck/exact HEAD/clean PASS.
+
+### 2026-09-10 S1.7 remaining checks waived by Founder
+
+- Founder decision: «давай пропустим этот этап». The remaining current-package
+  GUI and guarded 5/15/30/120-minute checks are waived for this prerelease only.
+- S1.7 plus cleanup acceptance: `ACCEPTED_WITH_RISK`. The swap-stop and unrun
+  evidence stays factual; no runtime result becomes PASS. Memory guards and
+  thresholds are unchanged.
+- Implementation, tests, package, audit and recovery remain verified. The
+  prerelease preserves executable `07a2dd98...b204f`; no rebuild or launch was
+  performed for the waiver. Archive extraction preserves signatures and all
+  233 file contents.
+- [Release acceptance](s1.7-release.md) records residual debt, exact package
+  hashes, rollback and the authoritative GitHub publication links. Green PR CI
+  is required before merge. No private, order-test or money action is included.

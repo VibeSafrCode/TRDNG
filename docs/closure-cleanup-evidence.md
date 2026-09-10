@@ -2,7 +2,14 @@
 
 Date: 2026-08-31; updated 2026-09-10. Branch:
 `codex/adaptive-orderbooks`. Status:
-`IMPLEMENTATION + CI ACCEPTED / FINAL PACKAGE GUI + SOAK BLOCKED_ENVIRONMENT / 120M NOT RUN`.
+`ACCEPTED_WITH_RISK / REMAINING GUI + SOAK WAIVED BY FOUNDER`.
+
+On 2026-09-10 the Founder explicitly skipped the remaining current-package GUI
+and 5/15/30/120-minute validation stage. That decision supersedes the prior
+merge/release blocker for this prerelease only. Historical failed/unrun results
+below remain unchanged; runtime memory protection stays enabled. The exact
+waiver, package, residual debt and rollback are in
+[S1.7 release acceptance](s1.7-release.md).
 
 ## Closed implementation and hardening
 
@@ -71,7 +78,7 @@ Date: 2026-08-31; updated 2026-09-10. Branch:
   is pushed. CI `34470736716` passed Release build, 367/367 tests and the bounded
   one-million-cycle replay.
 
-## Open gates, not hidden debt
+## Historical gate evidence and accepted debt
 
 - Screenshot/large-window/settings/populated-book acceptance is `PASS` on
   predecessor exact package `6474cdf...`. Computer Use did not synthesize the
@@ -86,8 +93,9 @@ Date: 2026-08-31; updated 2026-09-10. Branch:
   bytes. All runs removed their owned process. Between the 2026-09-10 attempts,
   an operator-observed no-app baseline recorded the unchanged counter
   `39228865` in twelve samples from `10:30:09Z` through `10:31:59Z`; it is not
-  claimed as a watchdog artifact. The 30-minute gate is `BLOCKED_ENVIRONMENT`;
-  the two-hour release gate remains `NOT RUN`.
+  claimed as a watchdog artifact. Historical 30-minute result:
+  `BLOCKED_ENVIRONMENT`; two-hour result: `NOT RUN`. Both remaining acceptance
+  requirements are now waived for this release, without a PASS claim.
 - The P2 accessibility debt is closed in current code head `9af7e0b`: Escape and
   backdrop close, cyclic Tab navigation and prior-focus restoration. Independent
   audit found no P0/P1/P2; local 367/367, full Release build and GitHub CI pass.
@@ -106,9 +114,9 @@ Date: 2026-08-31; updated 2026-09-10. Branch:
   tmpfs-capacity error before compilation; the independently audited correction
   preserved the 2 GiB/no-swap envelope and moved only package/tool caches to
   job-scoped runner temp. Corrected run `33392591048`: Release build PASS,
-  367/367 tests PASS and one-million-cycle replay PASS. Merge, tag and release
-  remain blocked until current-package GUI and soak gates pass or the Founder
-  explicitly accepts a documented waiver.
+  367/367 tests PASS and one-million-cycle replay PASS. The Founder waiver above
+  removes the remaining GUI/soak approval blocker for this prerelease. Merge
+  still requires green CI; publication uses the verified unchanged package.
 
 ## Security boundary
 

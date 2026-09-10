@@ -3,6 +3,12 @@
 This runbook is local-only operational guidance. It does not enable remote
 telemetry, private API calls, order submission or money actions.
 
+Release-specific exception: on 2026-09-10 the Founder waived the remaining
+current-package GUI and 5/15/30/120-minute acceptance runs for the S1.7
+prerelease. See [the recorded decision](s1.7-release.md). These checks remain
+unproven; this exception does not modify the normal launch procedure, memory
+thresholds or requirements for later releases.
+
 ## Deterministic replay gate
 
 Run from the repository root:

@@ -103,7 +103,7 @@ starter shortcuts. MEXC Spot and Gate/Bybit USDT Perpetual remain product-
 isolated; only exact catalog-proven venue symbols create public clients. No
 private or trading scope changed. Evidence: [`s1.6-evidence.md`](s1.6-evidence.md).
 
-## S1.7 — adaptive independent order books / visual + 15m accepted, release gates continue
+## S1.7 — adaptive independent order books / accepted with risk
 
 BTC/USDT is the startup/test selection. MEXC, Gate and Bybit perpetual books are
 public and independent; MEXC uses bounded REST polling. Each venue owns its
@@ -120,10 +120,11 @@ maximum without spread overlap. A clean exact-hash 15-minute guard passes near
 `6474cdf...`. Current head `9af7e0b` additionally closes Escape/backdrop/focus
 accessibility and passes independent audit, 367/367 local tests, Release build,
 package/codesign, recovery restore and GitHub CI. Its guarded GUI attempt was
-stopped by host-wide swap before visual input. PR publication passes. The quiet-host
-30-minute gate is blocked by repeated host-wide swap growth while the app stays
-below its healthy memory target; the 120-minute gate cannot start until that
-prerequisite passes. Merge/release therefore remain gated. Evidence:
+stopped by host-wide swap before visual input. On 2026-09-10 the Founder waived
+the remaining current-package GUI and 5/15/30/120-minute checks. S1.7 and the
+bounded cleanup scope are accepted with risk; long-run stability remains
+unproven. Merge requires green CI and the prerelease retains all runtime
+guards. Exact decision and package: [release acceptance](s1.7-release.md). Evidence:
 [`s1.7-adaptive-orderbooks-evidence.md`](s1.7-adaptive-orderbooks-evidence.md).
 
 MEXC Futures public books допустимы. Private futures trading остаётся
