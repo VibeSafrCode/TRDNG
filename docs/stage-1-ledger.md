@@ -12,7 +12,7 @@ Baseline зафиксирован: 2026-08-02 11:31 +05:00.
 
 | Объект | Подтверждённый факт | Статус |
 |---|---|---|
-| Workspace | Корень `/Users/safr.nikita/Documents/AI OS SAFR/02 Projects/TRDNG` доступен; исходники, тестовые проекты, документы и локальные артефакты присутствуют | VERIFIED |
+| Workspace | Локальный корень репозитория `TRDNG` доступен; исходники, тестовые проекты, документы и локальные артефакты присутствуют | VERIFIED |
 | Platform | SDK `10.0.302`, macOS arm64 | VERIFIED |
 | Solution | `Trdng.slnx` перечисляет четыре проекта `src` и один тестовый проект | VERIFIED |
 | Git baseline | В корне нет подтверждённой Git metadata; branch, HEAD, status и diff определить нельзя | BLOCKED |
@@ -316,13 +316,15 @@ Baseline зафиксирован: 2026-08-02 11:31 +05:00.
 
 ## Terminal repository publication — ACCEPTED
 
-- Private, no-license repository recreated from terminal-only root
+- Repository was initially recreated private and no-license from terminal-only root
   `5780ef66b20143e918e1d88399bfe985b0c1287e`.
 - Portable deterministic-test fix published at
   `3e9d9e2cfc1ab0c3dffc54aa6cb3646e4c374966`.
 - CI run `32235655100`: Release build PASS; official tests 245/245 PASS.
 - Fresh-clone excluded path/content scans: zero; worktree clean.
-- Recovery evidence exists externally; restore remains NOT RUN.
+- At publication time restore was `NOT RUN`. That historical status is
+  superseded by the verified current-head terminal-only recovery recorded in
+  the final closure entry below.
 
 ## In-app Keychain entry — ACCEPTED / PUBLISHED
 
@@ -507,3 +509,91 @@ Baseline зафиксирован: 2026-08-02 11:31 +05:00.
   `33302487008`: Release build PASS, 0 warnings/errors, official suite 327/327
   PASS. Merged to `main` as
   `2e7d9218c2db462bd0b45ec9f372462b1945cd00`.
+
+## S1.7 adaptive books + cleanup — IMPLEMENTATION ACCEPTED / RELEASE BLOCKED
+
+- Branch `codex/adaptive-orderbooks`, baseline
+  `b7b0e7060f4c00d7fcb072d78f02dfb59be2ee9e`.
+- BTC default; public perpetual cards for MEXC/Gate/Bybit; MEXC private trading
+  remains blocked. Credential-free BTC client smoke: 200/200, 50/50 and 200/200
+  levels respectively.
+- Per-book auto/manual depth, trackpad step, manual/automatic volume reference
+  and four colors are implemented. Visible ask/bid maxima normalize separately.
+- Closure adds bounded local settings persistence, transactional catalog refresh
+  with active-client reconciliation, graceful-close flushing, measured MEXC
+  polling and the P0 latest-wins 10 Hz/in-place-row memory correction.
+- Founder-reported spread overlap was corrected with reserved layout height and
+  explicit four-pixel gaps above/below the spread strip.
+- Independent P0/P1 audit: PASS. Final Release solution build: PASS, 0
+  warnings/errors. Official local suite: 367/367 PASS. Final one-million-cycle
+  replay and all structural scale tiers: PASS.
+- Final app package/codesign: PASS. Executable SHA-256
+  `1d93a3a074aa0bfdf36e5a49091a9b1acf9d51ecaf2790678fa3de4ba6b25e90`.
+  Five-minute guarded gate PASS; the next 15-minute attempt was stopped after
+  6m25s by system swap while app footprint stayed near 190 MiB. Classification:
+  `BLOCKED_ENVIRONMENT`; 30m/2h were not started.
+- Visual screenshot acceptance is `BLOCKED_ENVIRONMENT` after the single
+  Screen Recording capture failed; TCC was not changed or retried.
+- Evidence: [`s1.7-adaptive-orderbooks-evidence.md`](s1.7-adaptive-orderbooks-evidence.md).
+  Closure: [`closure-cleanup-evidence.md`](closure-cleanup-evidence.md).
+  Closure audit packet: [`audit/CLOSURE_CLEANUP_AUDIT_PACKET.md`](audit/CLOSURE_CLEANUP_AUDIT_PACKET.md).
+  The earlier [`audit/S17_ADAPTIVE_ORDERBOOKS_AUDIT_PACKET.md`](audit/S17_ADAPTIVE_ORDERBOOKS_AUDIT_PACKET.md)
+  is retained as superseded historical review scope.
+- Implementation commit `fb252bf`, recovery docs `b1c927d` and audited CI fix
+  `83e92ba` are pushed to PR #10. Corrected CI run `33392591048`: Release build,
+  367/367 tests and one-million-cycle replay PASS. Current terminal-only bundle
+  restore for head `83e92ba` PASS. Merge, tag and release remain blocked on
+  visual and quiet-host 15/30/120-minute gates. No private API,
+  `/order/test`, order or money action ran.
+
+### 2026-08-31 / 2026-09-10 visual and guarded closure correction
+
+- Predecessor package `6474cdf...` visual acceptance passes: BTC default,
+  MEXC/Gate/Bybit
+  `LIVE`, populated large/full-screen books, three independent settings panels,
+  and fully visible maximum ask/bid bars. The sales-side defect was a clipped
+  nearest/largest ask; a symmetric 12-pixel spread reservation fixes it.
+- The original flyout did not open in the packaged app. It was replaced by one
+  bounded central overlay. Follow-up code head `9af7e0b` closes Escape/backdrop,
+  cyclic Tab and prior-focus behavior. Independent audit: no P0/P1/P2.
+- Accessibility correction commit `9af7e0beb64a8bee7d311048ecde21f3519b01e5`
+  is pushed to PR #10. CI `34470736716`: Release build PASS, 367/367 tests PASS,
+  one-million-cycle replay PASS.
+- Current package executable SHA-256:
+  `07a2dd98b5353ed7159db15981765575155d0f68248fe33c0bbecebbd46b204f`;
+  packaged Desktop DLL SHA-256:
+  `304db925690b671645401a0d01b92416212fb6ae323ded869935b825b33ab062`;
+  strict deep codesign PASS.
+- Predecessor `6474cdf...` visual-stress 15m completed but is not memory
+  acceptance: Computer Use and
+  full-screen work raised physical footprint to 819,040,448 bytes. The clean
+  no-Computer-Use `6474cdf...` 15m gate passed with peak/final footprint
+  230,296,768/211,405,952 bytes, peak/final RSS
+  245,776,384/113,639,424 bytes and swap delta 0.
+- 30m remains `BLOCKED_ENVIRONMENT`: 2026-08-31 stopped after 5m10s; the first
+  2026-09-10 attempt stopped after approximately 20s; a controlled retry after
+  twelve unchanged no-app swap observations stopped after 10s. App footprint
+  stayed below 208 MiB and owned-process cleanup passed each time. 120m
+  `NOT RUN`; at that checkpoint merge/release required a clean host session
+  or an explicit documented waiver, subsequently granted below.
+- Current-hash 5m GUI attempt also stopped after 10s on `SYSTEM_SWAP_GROWTH`
+  before visual input, with app footprint 158,485,440 bytes and cleanup PASS.
+  Current code-head recovery bundle `trdng-terminal-closure-9af7e0b.bundle`:
+  4,270,248 bytes, mode 0600, SHA-256
+  `b304ce6a967df7f4f2ccaa422d83ae37ceca97e87c710f1422d974ac772f200d`;
+  verify/isolated clone/fsck/exact HEAD/clean PASS.
+
+### 2026-09-10 S1.7 remaining checks waived by Founder
+
+- Founder decision: «давай пропустим этот этап». The remaining current-package
+  GUI and guarded 5/15/30/120-minute checks are waived for this prerelease only.
+- S1.7 plus cleanup acceptance: `ACCEPTED_WITH_RISK`. The swap-stop and unrun
+  evidence stays factual; no runtime result becomes PASS. Memory guards and
+  thresholds are unchanged.
+- Implementation, tests, package, audit and recovery remain verified. The
+  prerelease preserves executable `07a2dd98...b204f`; no rebuild or launch was
+  performed for the waiver. Archive extraction preserves signatures and all
+  233 file contents.
+- [Release acceptance](s1.7-release.md) records residual debt, exact package
+  hashes, rollback and the authoritative GitHub publication links. Green PR CI
+  is required before merge. No private, order-test or money action is included.

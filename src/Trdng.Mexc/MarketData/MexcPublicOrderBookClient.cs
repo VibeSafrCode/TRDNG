@@ -85,8 +85,18 @@ public sealed class MexcPublicOrderBookClient : IPublicMarketDataClient
 
                 using var syncLifetime = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 var snapshotTask = FetchSnapshotAsync(syncLifetime.Token);
-                await ReceiveLoopAsync(socket, snapshotTask, cancellationToken).ConfigureAwait(false);
-                await syncLifetime.CancelAsync();
+                try
+                {
+                    await ReceiveLoopAsync(socket, snapshotTask, cancellationToken).ConfigureAwait(false);
+                }
+                finally
+                {
+                    await syncLifetime.CancelAsync().ConfigureAwait(false);
+                    try { await snapshotTask.ConfigureAwait(false); }
+                    catch (OperationCanceledException) when (syncLifetime.IsCancellationRequested) { }
+                    catch (Exception exception) when (exception is HttpRequestException or
+                        InvalidDataException or IOException) { }
+                }
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { break; }
             catch (WebSocketMessageEnvelopeException exception)
@@ -139,7 +149,7 @@ public sealed class MexcPublicOrderBookClient : IPublicMarketDataClient
                 if (_session.State == MexcOrderBookSessionState.Live)
                 {
                     ChangeState(MarketDataConnectionState.Live);
-                    SnapshotReceived?.Invoke(_session.Engine.Capture(Math.Min(30, _depth)));
+                    SnapshotReceived?.Invoke(_session.Engine.Capture(Math.Min(200, _depth)));
                 }
             }
         }

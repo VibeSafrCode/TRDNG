@@ -21,7 +21,7 @@ public sealed class BybitPublicOrderBookClient : IPublicMarketDataClient
 
     public BybitPublicOrderBookClient(
         string symbol = "BTCUSDT",
-        int depth = 50,
+        int depth = 200,
         decimal clusterPriceStep = 0.5m)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(symbol);
@@ -37,8 +37,8 @@ public sealed class BybitPublicOrderBookClient : IPublicMarketDataClient
         _depth = depth;
         _session = new BybitOrderBookSession(new OrderBookEngine(
             new OrderBookCapacityPolicy(depth, checked(depth * 2))));
-        _clusterAggregator =
-            new TradeClusterAggregator(TimeSpan.FromSeconds(15), clusterPriceStep);
+        _clusterAggregator = new TradeClusterAggregator(
+            TimeSpan.FromSeconds(15), clusterPriceStep, maxCompletedClusters: 1);
     }
 
     public event Action<OrderBookSnapshot>? SnapshotReceived;
@@ -231,7 +231,7 @@ public sealed class BybitPublicOrderBookClient : IPublicMarketDataClient
             return;
         }
 
-        SnapshotReceived?.Invoke(_session.Engine.Capture(Math.Min(30, _depth)));
+        SnapshotReceived?.Invoke(_session.Engine.Capture(Math.Min(200, _depth)));
         lastPublishedAt = now;
     }
 

@@ -32,8 +32,8 @@ public sealed class GatePublicMarketDataClient : IPublicMarketDataClient
 
         _contract = contract.ToUpperInvariant();
         _contractMultiplier = contractMultiplier;
-        _clusters =
-            new TradeClusterAggregator(TimeSpan.FromSeconds(15), clusterPriceStep);
+        _clusters = new TradeClusterAggregator(
+            TimeSpan.FromSeconds(15), clusterPriceStep, maxCompletedClusters: 1);
     }
 
     public string Venue => "GATE";
@@ -177,7 +177,7 @@ public sealed class GatePublicMarketDataClient : IPublicMarketDataClient
             }
             if (now - lastBook >= TimeSpan.FromMilliseconds(75))
             {
-                SnapshotReceived?.Invoke(_session.Engine.Capture(30));
+                SnapshotReceived?.Invoke(_session.Engine.Capture(50));
                 lastBook = now;
             }
             return;

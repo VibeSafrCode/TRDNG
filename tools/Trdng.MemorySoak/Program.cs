@@ -16,8 +16,8 @@ var result = await DeterministicMarketDataReplay.RunAsync(options, recorder);
 var samples = recorder.Samples;
 var budget = new MemorySoakBudget(
     maximumManagedHeapBytes: 256L * 1024 * 1024,
-    maximumWorkingSetBytes: 768L * 1024 * 1024,
-    maximumPrivateMemoryBytes: 2L * 1024 * 1024 * 1024,
+    maximumWorkingSetBytes: 512L * 1024 * 1024,
+    maximumPrivateMemoryBytes: 1L * 1024 * 1024 * 1024,
     maximumRetainedManagedGrowthBytes: 64L * 1024 * 1024,
     maximumAllocatedBytesPerOperation: 32L * 1024);
 var evaluation = budget.Evaluate(samples, result.AppliedBookUpdates);
@@ -30,7 +30,13 @@ Console.WriteLine(JsonSerializer.Serialize(new
     result,
     evaluation
 }));
-Environment.ExitCode = evaluation.Passed ? 0 : 2;
+var scaleResults = BoundedRenderScaleProbe.DefaultTiers
+    .Select(static tier => BoundedRenderScaleProbe.Run(tier))
+    .ToArray();
+foreach (var scale in scaleResults)
+    Console.WriteLine(JsonSerializer.Serialize(new { kind = "scale-tier", scale }));
+Environment.ExitCode = evaluation.Passed && scaleResults.All(static scale => scale.Passed)
+    ? 0 : 2;
 
 static int ReadInt(string[] values, string name, int fallback)
 {

@@ -10,14 +10,62 @@
 |---|---|---|
 | External archive | VERIFIED | 12 MiB; directory comparison PASS |
 | Pre-separation Git bundle | VERIFIED COMPLETE | Full bundle verified before clean recreation |
-| Restore verification | NOT RUN | Recovery artifacts exist; restore procedure not executed |
+| Historical restore verification | VERIFIED | Pre-separation bundle cloned in isolation; full strict fsck, exact historical HEAD and clean worktree PASS on 2026-08-31 |
+| Prior-head terminal restore verification | VERIFIED | Bundle for `83e92ba4aca685abc21888cb24317a2c611eb39d`; superseded but retained through closure decision |
+| Current code-head terminal restore verification | VERIFIED | Bundle for `9af7e0beb64a8bee7d311048ecde21f3519b01e5`; verify, isolated clone, strict fsck, exact HEAD and clean worktree PASS; later factual docs do not change code |
 | Repository root | VERIFIED | `5780ef66b20143e918e1d88399bfe985b0c1287e` |
-| Current main / origin | VERIFIED | PR-04 merged as `2e7d9218c2db462bd0b45ec9f372462b1945cd00` |
-| Current working branch | VERIFIED | local `main` fast-forwarded to `origin/main` after PR-04 merge |
-| GitHub publication | VERIFIED PUBLIC | Read-only check 2026-08-30: `PUBLIC`, default branch `main`; no visibility change performed in PR-02 |
+| Pre-release main | VERIFIED 2026-09-10 | `b7b0e7060f4c00d7fcb072d78f02dfb59be2ee9e`; subsequent merge revision is recorded by PR #10 and release tag |
+| Verified code/CI head | VERIFIED PUBLISHED | `codex/adaptive-orderbooks`; accessibility correction `9af7e0beb64a8bee7d311048ecde21f3519b01e5` pushed to PR #10 |
+| GitHub publication | VERIFIED PUBLIC | Read-only check 2026-08-31: `PUBLIC`, default branch `main`; no visibility change performed in this closure |
 | CI acceptance | VERIFIED | PR-04 run `33302487008`: Release build PASS; official tests 327/327 PASS |
+| Closure CI | VERIFIED | Latest run `34470736716`: Release build PASS; 367/367 tests PASS; one-million-cycle replay PASS |
 | Older sprint commit IDs | PRE-SEPARATION LOCAL HISTORY | IDs in older evidence documents are preserved by the verified bundle and are not ancestors of the recreated root |
-| Tag / release | NOT RUN | Не разрешены; проверяемых идентификаторов нет |
+| Tag / release acceptance | ACCEPTED_WITH_RISK; PUBLICATION PENDING | Founder waived remaining current-package GUI/soak checks on 2026-09-10; planned prerelease `v0.1.0-s1.7` still requires final CI, merge, tag and upload verification |
+
+Restore details: [`recovery-restore-evidence.md`](recovery-restore-evidence.md).
+
+## 2026-09-10 Founder waiver and prerelease acceptance
+
+The Founder instructed «давай пропустим этот этап» after the current-package
+GUI and 5/15/30/120-minute requirements were explained. Their release-blocking
+status is superseded for S1.7 only; evidence remains unproven/blocked/not run.
+The below historical swap stops are not relabelled PASS. Normal runtime guards
+and thresholds are unchanged. Package archive extraction/signature/content and
+code-head recovery verification pass. Exact hashes, accepted debt and rollback
+are recorded in [release acceptance](s1.7-release.md). Publication remains
+pending; the eventual [PR #10](https://github.com/VibeSafrCode/TRDNG/pull/10)
+merge and planned [prerelease](https://github.com/VibeSafrCode/TRDNG/releases/tag/v0.1.0-s1.7)
+must be verified before a completed publication is recorded.
+
+## 2026-08-31 / 2026-09-10 S1.7 correction package
+
+- Current local package executable SHA-256:
+  `07a2dd98b5353ed7159db15981765575155d0f68248fe33c0bbecebbd46b204f`;
+  packaged `Trdng.Desktop.dll` SHA-256:
+  `304db925690b671645401a0d01b92416212fb6ae323ded869935b825b33ab062`;
+  strict deep ad-hoc codesign PASS.
+- Predecessor package `6474cdf...` visual acceptance PASS: BTC default, three
+  populated `LIVE` books,
+  large/full-screen fill, three settings overlays, and corrected fully visible
+  ask/bid maxima around the spread strip.
+- Predecessor package `6474cdf...` clean no-Computer-Use 15-minute guard PASS:
+  peak/final physical footprint
+  230,296,768/211,405,952 bytes; swap delta 0; cleanup PASS.
+- 30-minute gate BLOCKED_ENVIRONMENT. One 2026-08-31 and two 2026-09-10
+  attempts stopped on system swap growth with application footprint below
+  208 MiB; owned process cleanup PASS. Two-hour gate NOT RUN.
+- Accessibility correction `9af7e0beb64a8bee7d311048ecde21f3519b01e5`
+  is pushed to PR #10; CI `34470736716` PASS. Current recovery bundle
+  `artifacts/backups/trdng-terminal-closure-9af7e0b.bundle` is 4,270,248 bytes,
+  mode `0600`, SHA-256
+  `b304ce6a967df7f4f2ccaa422d83ae37ceca97e87c710f1422d974ac772f200d`;
+  bundle verify, isolated clone, strict fsck, exact HEAD and clean worktree PASS.
+  At that checkpoint merge/release waited for a clean macOS session; this
+  requirement is superseded by the release-specific Founder waiver above.
+- The current package guarded visual attempt stopped after 10 seconds on
+  host-wide swap growth at 158,485,440 bytes app footprint, before visual input.
+  Cleanup PASS. Current-hash GUI and 15/30/120-minute gates are therefore not
+  claimed PASS.
 
 ## 2026-08-20 masked credential UI verification
 
@@ -97,6 +145,42 @@
 - Implementation/evidence commit `8f0eab7`; pull request `#9`; final CI
   `33302487008` PASS with 327/327 official tests. Merged to `main` as
   `2e7d9218c2db462bd0b45ec9f372462b1945cd00`.
+
+## 2026-08-30/31 S1.7 and cleanup closure package
+
+- Branch `codex/adaptive-orderbooks`; baseline
+  `b7b0e7060f4c00d7fcb072d78f02dfb59be2ee9e`; independent P0/P1 audit PASS.
+- Final Release solution build: PASS, 0 warnings/errors. Official local suite:
+  367/367 PASS. One-million-cycle replay and structural scale tiers: PASS.
+- The first publish process exited 1 without output and produced zero files;
+  the existing app remained untouched. One controlled retry with build-server
+  reuse disabled succeeded. One final self-contained `osx-arm64` synchronization replaced only
+  the existing ignored `artifacts/TRDNG.app`; strict deep ad-hoc codesign: PASS.
+- Packaged `Trdng.Desktop.dll` SHA-256:
+  `c5c65e792fd58c91f7c1fe6a609bc8ce89f6d061083c300afe566257a6b9b7b3`.
+- Signed executable SHA-256:
+  `1d93a3a074aa0bfdf36e5a49091a9b1acf9d51ecaf2790678fa3de4ba6b25e90`.
+- Rollback package: `/private/tmp/trdng-s17-closure-package.F4ptfx/TRDNG.app.backup`;
+  current app and backup are each approximately 115 MiB. This temporary locator
+  is retained through the closure decision, not a long-term backup.
+- Final exact package 5m guarded gate PASS. 15m attempt stopped after 6m25s on
+  system swap; app peak/final footprint 199,281,728/190,204,992 bytes, cleanup
+  PASS. 30m/2h NOT RUN after failed prerequisite.
+- Screenshot visual gate BLOCKED_ENVIRONMENT. Closure implementation commit:
+  `fb252bfa0afda8f57d51202d74baeb29e8954d79`; published branch head after
+  recovery docs and CI correction:
+  `83e92ba4aca685abc21888cb24317a2c611eb39d`.
+- Current terminal-only bundle:
+  `artifacts/backups/trdng-terminal-closure-83e92ba.bundle`; 4,255,900 bytes;
+  SHA-256 `af37d24bc2ca9c809538e9868810140245458355fe271fe64696bf32c5a96dd4`;
+  permissions `0600`; bundle verify, isolated clone, strict fsck, exact HEAD and
+  clean worktree PASS. Retain through the closure/release decision.
+- First closure CI run `33392273068` failed before compilation because NuGet
+  packages exhausted the deliberately small `/tmp` tmpfs. The audited fix moved
+  only tool/package caches to job-scoped runner temp without weakening the
+  2 GiB/no-swap cgroup. Corrected run `33392591048`: build PASS, 367/367 tests
+  PASS and one-million-cycle replay PASS. PR #10 is updated. Merge,
+  notarization, tag and release remain BLOCKED.
 
 ## Формат backup-записи
 

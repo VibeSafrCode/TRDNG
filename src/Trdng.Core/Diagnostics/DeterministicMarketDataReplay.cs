@@ -47,10 +47,11 @@ public static class DeterministicMarketDataReplay
 {
     private static readonly (string BaseAsset, MarketProduct Product)[] Markets =
     [
-        ("APT", MarketProduct.Perpetual),
+        ("BTC", MarketProduct.Perpetual),
         ("BTC", MarketProduct.Spot),
         ("SOL", MarketProduct.Perpetual),
-        ("ETH", MarketProduct.Spot)
+        ("ETH", MarketProduct.Spot),
+        ("APT", MarketProduct.Perpetual)
     ];
 
     public static async Task<DeterministicReplayResult> RunAsync(

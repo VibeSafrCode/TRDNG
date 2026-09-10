@@ -21,13 +21,13 @@ public sealed class MarketSelectionControllerTests
 
         Assert.True(await controller.SelectAsync("APT", MarketProduct.Perpetual));
         Assert.Equal("APT/USDT:PERPETUAL", controller.SelectedInstrument!.Value.Id);
-        Assert.Equal(2, controller.Clients.Count);
-        Assert.DoesNotContain(created, client => client.TradingVenue == TradingVenue.Mexc);
+        Assert.Equal(3, controller.Clients.Count);
+        Assert.Contains(created, client => client.TradingVenue == TradingVenue.Mexc);
 
         Assert.True(await controller.SelectAsync("BTC", MarketProduct.Perpetual));
         Assert.Equal(2, resets);
-        Assert.All(created.Take(2), client => Assert.True(client.Disposed));
-        Assert.Equal(["BYBIT", "GATE"], controller.Clients.Select(client => client.Venue));
+        Assert.All(created.Take(3), client => Assert.True(client.Disposed));
+        Assert.Equal(["BYBIT", "GATE", "MEXC"], controller.Clients.Select(client => client.Venue));
     }
 
     [Fact]
@@ -41,7 +41,7 @@ public sealed class MarketSelectionControllerTests
         });
         await controller.SelectAsync("APT", MarketProduct.Perpetual);
         Assert.False(await controller.SelectAsync("APT", MarketProduct.Perpetual));
-        Assert.Equal(2, count);
+        Assert.Equal(3, count);
     }
 
     [Fact]
@@ -61,7 +61,7 @@ public sealed class MarketSelectionControllerTests
             controller.SelectAsync("APT", MarketProduct.Perpetual));
 
         Assert.Equal("APT/USDT:PERPETUAL", controller.SelectedInstrument!.Value.Id);
-        Assert.Equal(2, controller.Clients.Count);
+        Assert.Equal(3, controller.Clients.Count);
         Assert.All(created.Except(controller.Clients.Cast<FakeClient>()), client => Assert.True(client.Disposed));
         Assert.All(controller.Clients.Cast<FakeClient>(), client => Assert.False(client.Disposed));
     }
@@ -86,12 +86,13 @@ public sealed class MarketSelectionControllerTests
     }
 
     [Fact]
-    public async Task ResetClearsOldBookBeforeNewClientsAreCreated()
+    public async Task ResetClearsOldBookOnlyAfterReplacementClientsAreStaged()
     {
         var visibleBook = new List<int>();
+        var sawOldBookWhileStaging = false;
         await using var controller = new MarketSelectionController(capability =>
         {
-            Assert.Empty(visibleBook);
+            if (visibleBook.Count != 0) sawOldBookWhileStaging = true;
             return new FakeClient(capability.Venue, capability.VenueSymbol);
         });
         controller.Resetting += visibleBook.Clear;
@@ -100,6 +101,7 @@ public sealed class MarketSelectionControllerTests
 
         await controller.SelectAsync("BTC", MarketProduct.Spot);
 
+        Assert.True(sawOldBookWhileStaging);
         Assert.Empty(visibleBook);
     }
 
@@ -143,12 +145,12 @@ public sealed class MarketSelectionControllerTests
     }
 
     [Fact]
-    public void MexcPerpetualCapabilityRemainsUnavailableAndBlocked()
+    public void MexcPerpetualPublicBookIsAvailableWhileTradingRemainsBlocked()
     {
         var capability = StarterInstrumentCatalog.Find(
             new CanonicalInstrument("APT", "USDT", MarketProduct.Perpetual), TradingVenue.Mexc);
         Assert.NotNull(capability);
-        Assert.False(capability.CanStreamMarketData);
+        Assert.True(capability.CanStreamMarketData);
         Assert.Equal(CapabilityAvailability.Blocked, capability.Trading);
     }
 
@@ -184,6 +186,75 @@ public sealed class MarketSelectionControllerTests
         Assert.Same(existing, controller.Clients.Single());
         Assert.False(((FakeClient)existing).Disposed);
         Assert.Equal(supported, controller.SelectedInstrument);
+    }
+
+    [Fact]
+    public async Task ForcedRefreshRebuildsExactActiveMappingAndClearFailsClosed()
+    {
+        var instrument = new CanonicalInstrument("BTC", "USDT", MarketProduct.Perpetual);
+        var catalog = new PublicInstrumentCatalog();
+        catalog.Replace([new(instrument, TradingVenue.Bybit, "BTCUSDT", 0.1m)]);
+        var created = new List<FakeClient>();
+        await using var controller = new MarketSelectionController(capability =>
+        {
+            var client = new FakeClient(capability.Venue, capability.VenueSymbol);
+            created.Add(client);
+            return client;
+        }, catalog.Find);
+
+        Assert.True(await controller.SelectAsync("BTC", "USDT", MarketProduct.Perpetual));
+        var original = created.Single();
+        catalog.Replace([new(instrument, TradingVenue.Bybit, "BTCUSDT.P", 0.1m)]);
+
+        Assert.True(await controller.SelectAsync("BTC", "USDT", MarketProduct.Perpetual,
+            forceRefresh: true, CancellationToken.None));
+        Assert.True(original.Disposed);
+        Assert.Equal("BTCUSDT.P", Assert.IsType<FakeClient>(controller.Clients.Single()).Symbol);
+
+        await controller.ClearAsync();
+        Assert.Null(controller.SelectedInstrument);
+        Assert.Empty(controller.Clients);
+        Assert.True(created[^1].Disposed);
+    }
+
+    [Fact]
+    public async Task ForcedRefreshFailureNeverLeavesPartialClientsAndCanRetry()
+    {
+        var instrument = new CanonicalInstrument("BTC", "USDT", MarketProduct.Perpetual);
+        var catalog = new PublicInstrumentCatalog();
+        catalog.Replace([new(instrument, TradingVenue.Bybit, "BTCUSDT", 0.1m)]);
+        var failFactory = false;
+        var failDispose = false;
+        await using var controller = new MarketSelectionController(capability =>
+        {
+            if (failFactory) throw new InvalidOperationException("synthetic factory failure");
+            return new FakeClient(capability.Venue, capability.VenueSymbol, () =>
+                failDispose
+                    ? Task.FromException(new IOException("synthetic dispose failure"))
+                    : Task.CompletedTask);
+        }, catalog.Find);
+
+        Assert.True(await controller.SelectAsync("BTC", "USDT", MarketProduct.Perpetual));
+        var original = controller.Clients.Single();
+        failFactory = true;
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            controller.SelectAsync("BTC", "USDT", MarketProduct.Perpetual,
+                forceRefresh: true, CancellationToken.None));
+        Assert.Same(original, controller.Clients.Single());
+        Assert.False(Assert.IsType<FakeClient>(original).Disposed);
+
+        failFactory = false;
+        failDispose = true;
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            controller.SelectAsync("BTC", "USDT", MarketProduct.Perpetual,
+                forceRefresh: true, CancellationToken.None));
+        Assert.Null(controller.SelectedInstrument);
+        Assert.Empty(controller.Clients);
+
+        failDispose = false;
+        Assert.True(await controller.SelectAsync("BTC", "USDT", MarketProduct.Perpetual,
+            forceRefresh: true, CancellationToken.None));
+        Assert.Single(controller.Clients);
     }
 
     private sealed class FakeClient : IPublicMarketDataClient

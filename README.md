@@ -4,8 +4,13 @@ MacMakeMoney_618 (`MMM_618`) is an independent macOS terminal under active Stage
 
 ## Current Stage 1 capabilities
 
-- Public books: Bybit and Gate perpetuals; MEXC Spot.
-- Canonical APT/USDT and BTC/USDT selection with strict Spot/Perpetual isolation.
+- Public books: MEXC Spot plus MEXC, Gate and Bybit USDT perpetuals. MEXC
+  perpetual data currently uses bounded public REST polling; private futures
+  trading remains blocked.
+- Dynamic exact public catalogs with bounded search, BTC/USDT as the startup
+  selection, APT/USDT as a shortcut, and strict Spot/Perpetual isolation.
+- Independent full-height venue books with per-book auto/manual depth, trackpad
+  adjustment, visible-side volume scaling and customizable bar colors.
 - Snapshot/delta continuity, reconnect/resnapshot, stale handling and separate venue liquidity indicators.
 - Shared comparison only for fresh comparable books—never merged liquidity or smart routing.
 - Dry-run market intents, official-filter validation, simulation-only risk limits, STOP, two-step confirmation, journaled simulation and restart reconciliation.
@@ -43,6 +48,6 @@ Live public-market smokes are excluded from normal tests and CI. Private calls, 
 
 ## Boundaries
 
-Stage 1 is incomplete. Runtime VSTest and GUI evidence gaps remain in the ledger. MEXC Futures private trading is officially blocked; production `/api/v3/order`, cancel, withdrawal, transfer, smart routing and multi-venue execution are absent or forbidden.
+Stage 1 is incomplete. S1.7 and cleanup are accepted with risk for the [S1.7 prerelease](docs/s1.7-release.md): 367/367 deterministic tests pass, while the Founder explicitly waived the remaining current-package GUI and memory runs on 2026-09-10. Long-run stability remains unproven and runtime memory protection stays enabled. MEXC Futures private trading is officially blocked; production `/api/v3/order`, cancel, withdrawal, transfer, smart routing and multi-venue execution are absent or forbidden.
 
 No license has been selected. Until the owner chooses one, do not assume permission to redistribute or reuse the source.
