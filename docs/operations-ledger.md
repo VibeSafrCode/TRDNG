@@ -14,13 +14,14 @@
 | Prior-head terminal restore verification | VERIFIED | Bundle for `83e92ba4aca685abc21888cb24317a2c611eb39d`; superseded but retained through closure decision |
 | Current code-head terminal restore verification | VERIFIED | Bundle for `9af7e0beb64a8bee7d311048ecde21f3519b01e5`; verify, isolated clone, strict fsck, exact HEAD and clean worktree PASS; later factual docs do not change code |
 | Repository root | VERIFIED | `5780ef66b20143e918e1d88399bfe985b0c1287e` |
-| Pre-release main | VERIFIED 2026-09-10 | `b7b0e7060f4c00d7fcb072d78f02dfb59be2ee9e`; subsequent merge revision is recorded by PR #10 and release tag |
-| Verified code/CI head | VERIFIED PUBLISHED | `codex/adaptive-orderbooks`; accessibility correction `9af7e0beb64a8bee7d311048ecde21f3519b01e5` pushed to PR #10 |
+| Pre-release main | VERIFIED 2026-09-10 | `b7b0e7060f4c00d7fcb072d78f02dfb59be2ee9e` |
+| S1.7 merged main / tag | VERIFIED | PR #10 merged as `49dc2d0e38d8a2e87a9119e570d10d2d133e9d22`; `v0.1.0-s1.7` points to it |
+| Verified package code | VERIFIED PUBLISHED | Source equivalent to `9af7e0beb64a8bee7d311048ecde21f3519b01e5`; later changes are documentation only |
 | GitHub publication | VERIFIED PUBLIC | Read-only check 2026-08-31: `PUBLIC`, default branch `main`; no visibility change performed in this closure |
 | CI acceptance | VERIFIED | PR-04 run `33302487008`: Release build PASS; official tests 327/327 PASS |
-| Closure CI | VERIFIED | Latest run `34470736716`: Release build PASS; 367/367 tests PASS; one-million-cycle replay PASS |
+| Release commit CI | VERIFIED | Main run `34474116388`: Release build 0 warnings/errors, 367/367 tests PASS, one-million-cycle replay and all six scale tiers PASS |
 | Older sprint commit IDs | PRE-SEPARATION LOCAL HISTORY | IDs in older evidence documents are preserved by the verified bundle and are not ancestors of the recreated root |
-| Tag / release acceptance | ACCEPTED_WITH_RISK; PUBLICATION PENDING | Founder waived remaining current-package GUI/soak checks on 2026-09-10; planned prerelease `v0.1.0-s1.7` still requires final CI, merge, tag and upload verification |
+| Tag / release acceptance | ACCEPTED_WITH_RISK; VERIFIED PUBLISHED | `v0.1.0-s1.7` published 2026-09-10T12:01:42Z as prerelease; downloaded asset bytes/digest match; Founder runtime waiver retained |
 
 Restore details: [`recovery-restore-evidence.md`](recovery-restore-evidence.md).
 
@@ -32,10 +33,12 @@ status is superseded for S1.7 only; evidence remains unproven/blocked/not run.
 The below historical swap stops are not relabelled PASS. Normal runtime guards
 and thresholds are unchanged. Package archive extraction/signature/content and
 code-head recovery verification pass. Exact hashes, accepted debt and rollback
-are recorded in [release acceptance](s1.7-release.md). Publication remains
-pending; the eventual [PR #10](https://github.com/VibeSafrCode/TRDNG/pull/10)
-merge and planned [prerelease](https://github.com/VibeSafrCode/TRDNG/releases/tag/v0.1.0-s1.7)
-must be verified before a completed publication is recorded.
+are recorded in [release acceptance](s1.7-release.md).
+[PR #10](https://github.com/VibeSafrCode/TRDNG/pull/10) is merged and the
+[prerelease](https://github.com/VibeSafrCode/TRDNG/releases/tag/v0.1.0-s1.7)
+is published. Main CI, remote tag, asset size/digest and downloaded ZIP
+comparison are verified. This completes the authorized closure with accepted
+runtime debt; no new product/trading sprint was started.
 
 ## 2026-08-31 / 2026-09-10 S1.7 correction package
 

@@ -597,3 +597,17 @@ Baseline зафиксирован: 2026-08-02 11:31 +05:00.
 - [Release acceptance](s1.7-release.md) records residual debt, exact package
   hashes, rollback and the authoritative GitHub publication links. Green PR CI
   is required before merge. No private, order-test or money action is included.
+
+### 2026-09-10 S1.7 prerelease publication — VERIFIED
+
+- Waiver commit `6031247d6c94a84c2b6ea4c852755c25a7bf6f8e`; PR CI
+  `34473938868` PASS. PR #10 merged at `11:58:21Z` as
+  `49dc2d0e38d8a2e87a9119e570d10d2d133e9d22`.
+- Main CI `34474116388`: build 0 warnings/errors, 367/367 tests and bounded
+  one-million-cycle replay PASS; all six synthetic scale tiers PASS.
+- Remote tag `v0.1.0-s1.7` points to that merge. GitHub prerelease published
+  at `12:01:42Z`; `isDraft=false`, `isPrerelease=true`. Signed ZIP and
+  SHA256SUMS are the only release assets. Downloaded ZIP bytes and SHA-256 match.
+- S1.7 + cleanup: `COMPLETE_WITH_ACCEPTED_RISK`. Current-package runtime debt
+  remains under the recorded Founder waiver. Package source, signature and
+  memory guards are unchanged. `READY_FOR_FOUNDER_NEXT_SPRINT`.
