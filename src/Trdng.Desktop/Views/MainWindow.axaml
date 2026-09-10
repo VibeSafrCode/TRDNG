@@ -5,6 +5,7 @@
         x:DataType="vm:MainViewModel"
         Width="1280" Height="720" MinWidth="960" MinHeight="540"
         FontSize="14" Background="#0B0D10" Foreground="#F3F4F6"
+        KeyDown="MainWindow_KeyDown"
         Title="{Binding InstrumentTitle, StringFormat='MMM_618 · {0}'}">
   <Window.Resources>
     <DataTemplate x:Key="AskRow" x:DataType="vm:BookLevelViewModel">
@@ -317,17 +318,20 @@
     </Grid>
 
     <Border x:Name="BookSettingsBackdrop" Grid.Row="1"
-            Background="#B0000000" IsVisible="False" />
+            Background="#B0000000" IsVisible="False"
+            PointerPressed="BookSettingsBackdrop_PointerPressed" />
     <Border x:Name="BookSettingsOverlay" Grid.Row="1"
             Width="330" MaxHeight="560" HorizontalAlignment="Center"
             VerticalAlignment="Center" Background="#15181D"
             BorderBrush="#3A414D" BorderThickness="1" CornerRadius="10"
-            Padding="12" IsVisible="False">
+            Padding="12" IsVisible="False"
+            KeyboardNavigation.TabNavigation="Cycle">
       <Grid RowDefinitions="Auto,*">
         <Grid ColumnDefinitions="*,Auto" Margin="4,0,4,8">
           <TextBlock Text="НАСТРОЙКИ СТАКАНА" FontWeight="Bold"
                      VerticalAlignment="Center" />
-          <Button Grid.Column="1" Content="✕" Padding="8,3"
+          <Button x:Name="BookSettingsCloseButton" Grid.Column="1"
+                  Content="✕" Padding="8,3"
                   ToolTip.Tip="Закрыть настройки"
                   Click="CloseBookSettings_Click" />
         </Grid>

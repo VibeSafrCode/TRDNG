@@ -8,6 +8,8 @@ namespace Trdng.Desktop.Views;
 
 public partial class MainWindow : Window
 {
+    private IInputElement? _bookSettingsReturnFocus;
+
     public MainWindow()
     {
         InitializeComponent();
@@ -125,16 +127,40 @@ public partial class MainWindow : Window
             _ => null
         };
         if (BookSettingsContent.Content is null) return;
+        _bookSettingsReturnFocus = FocusManager?.GetFocusedElement();
         BookSettingsBackdrop.IsVisible = true;
         BookSettingsOverlay.IsVisible = true;
+        BookSettingsCloseButton.Focus(NavigationMethod.Unspecified, KeyModifiers.None);
     }
 
     private void CloseBookSettings_Click(object? sender,
         Avalonia.Interactivity.RoutedEventArgs e)
     {
+        CloseBookSettings();
+    }
+
+    private void BookSettingsBackdrop_PointerPressed(object? sender,
+        PointerPressedEventArgs e)
+    {
+        CloseBookSettings();
+        e.Handled = true;
+    }
+
+    private void MainWindow_KeyDown(object? sender, KeyEventArgs e)
+    {
+        if (!BookSettingsOverlay.IsVisible || e.Key != Key.Escape) return;
+        CloseBookSettings();
+        e.Handled = true;
+    }
+
+    private void CloseBookSettings()
+    {
         BookSettingsOverlay.IsVisible = false;
         BookSettingsBackdrop.IsVisible = false;
         BookSettingsContent.Content = null;
+        if (_bookSettingsReturnFocus is { } priorFocus)
+            FocusManager?.Focus(priorFocus, NavigationMethod.Unspecified, KeyModifiers.None);
+        _bookSettingsReturnFocus = null;
     }
 
 }
