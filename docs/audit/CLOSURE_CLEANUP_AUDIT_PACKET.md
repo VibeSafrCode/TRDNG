@@ -43,13 +43,19 @@ Review the exact accepted diff against these invariants:
 - [Recovery evidence](../recovery-restore-evidence.md)
 - [Operations ledger](../operations-ledger.md)
 
-Local final facts before GitHub publication: Release build 0 warnings/errors;
-official deterministic suite 367/367 PASS; one-million-cycle replay PASS;
-final signed executable SHA-256
-`1d93a3a074aa0bfdf36e5a49091a9b1acf9d51ecaf2790678fa3de4ba6b25e90`;
-five-minute guarded app run PASS. The 15-minute prerequisite was stopped by
-system swap while app physical footprint remained near 190 MiB; visual capture
-was blocked by Screen Recording permission. These are not release PASS claims.
+Current correction facts: Release build 0 warnings/errors; official
+deterministic suite 367/367 PASS; one-million-cycle replay PASS; final signed
+executable SHA-256
+`6474cdfc5cc565bb2909c3dfbbedcab0ec1b298fc59293006c1e3c22929d48a9`.
+Fresh visual QA proves three populated books, large/full-screen fill, all three
+settings panels and no ask/bid clipping. The Computer-Use visual-stress run is
+explicitly not memory evidence. A separate quiet exact-hash 15-minute run
+passed with peak physical footprint 230,296,768 bytes and swap delta 0.
+Correction commit `1c3a37f5f370111c5856a433f77e20a29ed3db9c` and CI
+`33399814390` pass. Three 30-minute attempts stopped early on host-wide swap
+growth while app footprint remained below 208 MiB; the two-hour release soak
+was not started because its prerequisite did not pass. Review this as an
+environment gate, not as release PASS or permission to weaken the watchdog.
 
 ## Requested output
 

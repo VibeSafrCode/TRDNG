@@ -48,6 +48,6 @@ Live public-market smokes are excluded from normal tests and CI. Private calls, 
 
 ## Boundaries
 
-Stage 1 is incomplete. The deterministic runtime suite is currently 367/367 PASS; the remaining S1.7 evidence gaps are screenshot-based visual acceptance and quiet-host 15/30/120-minute guarded soaks. MEXC Futures private trading is officially blocked; production `/api/v3/order`, cancel, withdrawal, transfer, smart routing and multi-venue execution are absent or forbidden.
+Stage 1 is incomplete. The deterministic runtime suite is currently 367/367 PASS. S1.7 exact-package visual acceptance and its quiet-host 15-minute guard pass; the 30-minute gate is blocked by host-wide swap activity and the two-hour release soak remains gated behind it. MEXC Futures private trading is officially blocked; production `/api/v3/order`, cancel, withdrawal, transfer, smart routing and multi-venue execution are absent or forbidden.
 
 No license has been selected. Until the owner chooses one, do not assume permission to redistribute or reuse the source.

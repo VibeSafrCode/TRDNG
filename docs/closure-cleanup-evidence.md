@@ -1,7 +1,8 @@
 # S1.7 and cleanup closure evidence
 
-Date: 2026-08-31. Branch: `codex/adaptive-orderbooks`. Status:
-`IMPLEMENTATION ACCEPTED / RELEASE BLOCKED BY ENVIRONMENT GATES`.
+Date: 2026-08-31; updated 2026-09-10. Branch:
+`codex/adaptive-orderbooks`. Status:
+`IMPLEMENTATION + VISUAL + 15M ACCEPTED / 30M BLOCKED_ENVIRONMENT / 120M NOT RUN`.
 
 ## Closed implementation and hardening
 
@@ -45,24 +46,47 @@ Date: 2026-08-31. Branch: `codex/adaptive-orderbooks`. Status:
   the app was still untouched. One controlled retry with build-server reuse
   disabled completed successfully before the single app replacement.
 - Signed executable SHA-256:
-  `1d93a3a074aa0bfdf36e5a49091a9b1acf9d51ecaf2790678fa3de4ba6b25e90`.
+  `6474cdfc5cc565bb2909c3dfbbedcab0ec1b298fc59293006c1e3c22929d48a9`.
 - Packaged/publish `Trdng.Desktop.dll` SHA-256:
-  `c5c65e792fd58c91f7c1fe6a609bc8ce89f6d061083c300afe566257a6b9b7b3`.
+  `bda0e827ca86ba49fa93a72da98ef6bf1d8fe5221fa8d1137461427f51bc3119`.
 - Guarded five-minute exact-package run: `PASS_DURATION`, peak physical
   footprint 191,515,776 bytes, swap growth 0, cleanup PASS.
 - The following 15-minute attempt stopped after 6m25s on
   `SYSTEM_SWAP_GROWTH`; app peak/final footprint was
   199,281,728/190,204,992 bytes and cleanup PASS. Classification:
   `BLOCKED_ENVIRONMENT`, not app growth.
+- Fresh exact-package visual QA later became available. It proved BTC default,
+  three populated `LIVE` books, large/full-screen fill and all three settings
+  panels. The broken flyout was replaced by a bounded inline overlay. A clipped
+  largest ask explained the incorrect sales-side scale; a symmetric 12-pixel
+  spread reservation corrected it on all three venues.
+- The visual-stress run is not memory evidence: Computer Use/full-screen work
+  raised physical footprint to 819,040,448 bytes without swap growth. The clean
+  no-Computer-Use exact-hash 15-minute gate passed with peak/final footprint
+  230,296,768/211,405,952 bytes and zero swap delta.
+- Correction commit `1c3a37f5f370111c5856a433f77e20a29ed3db9c` is pushed.
+  CI `33399814390` passed Release build, 367/367 tests and the bounded
+  one-million-cycle replay.
 
 ## Open gates, not hidden debt
 
-- Screenshot/large-window/settings visual acceptance is
-  `BLOCKED_ENVIRONMENT`: one capture attempt failed because Screen Recording
-  was unavailable; no TCC workaround or retry was used.
-- Quiet-host guarded 15-, 30- and 120-minute gates remain required. The
-  30-minute and two-hour runs were not started after the 15-minute prerequisite
-  stopped.
+- Screenshot/large-window/settings/populated-book acceptance is `PASS` on the
+  final exact package. Computer Use did not synthesize the exact trackpad wheel
+  path, so only that GUI gesture remains `NOT PROVEN`; deterministic adjustment
+  tests pass.
+- Quiet-host guarded 15-minute gate is `PASS`. Three 30-minute attempts stopped
+  on `SYSTEM_SWAP_GROWTH`: 2026-08-31 after 5m10s with peak/final footprint
+  207,949,120/205,081,856 bytes; 2026-09-10 after approximately 20 seconds with
+  163,417,024 bytes; and a controlled retry after 10 seconds with 152,030,208
+  bytes. All runs removed their owned process. Between the 2026-09-10 attempts,
+  an operator-observed no-app baseline recorded the unchanged counter
+  `39228865` in twelve samples from `10:30:09Z` through `10:31:59Z`; it is not
+  claimed as a watchdog artifact. The 30-minute gate is `BLOCKED_ENVIRONMENT`;
+  the two-hour release gate remains `NOT RUN`.
+- Independent audit found no P0/P1 in the overlay or spread correction. A P2
+  accessibility debt remains: the overlay is closed by its explicit button but
+  does not yet trap focus or close on Escape/backdrop. It does not invalidate
+  visual or memory evidence.
 - Closure implementation commit:
   `fb252bfa0afda8f57d51202d74baeb29e8954d79`. Published branch head after the
   recovery-doc record and audited CI correction produced verified code/CI head:

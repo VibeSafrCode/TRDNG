@@ -545,3 +545,32 @@ Baseline зафиксирован: 2026-08-02 11:31 +05:00.
   restore for head `83e92ba` PASS. Merge, tag and release remain blocked on
   visual and quiet-host 15/30/120-minute gates. No private API,
   `/order/test`, order or money action ran.
+
+### 2026-08-31 / 2026-09-10 visual and guarded closure correction
+
+- Exact-package visual acceptance now passes: BTC default, MEXC/Gate/Bybit
+  `LIVE`, populated large/full-screen books, three independent settings panels,
+  and fully visible maximum ask/bid bars. The sales-side defect was a clipped
+  nearest/largest ask; a symmetric 12-pixel spread reservation fixes it.
+- The original flyout did not open in the packaged app. It was replaced by one
+  bounded central overlay. Independent audit: no P0/P1; P2 Escape/backdrop/focus
+  accessibility polish remains.
+- Correction commit `1c3a37f5f370111c5856a433f77e20a29ed3db9c` is pushed
+  to PR #10. CI `33399814390`: Release build PASS, 367/367 tests PASS,
+  one-million-cycle replay PASS.
+- Final package executable SHA-256:
+  `6474cdfc5cc565bb2909c3dfbbedcab0ec1b298fc59293006c1e3c22929d48a9`;
+  packaged Desktop DLL SHA-256:
+  `bda0e827ca86ba49fa93a72da98ef6bf1d8fe5221fa8d1137461427f51bc3119`;
+  strict deep codesign PASS.
+- Visual-stress 15m completed but is not memory acceptance: Computer Use and
+  full-screen work raised physical footprint to 819,040,448 bytes. The clean
+  no-Computer-Use 15m gate passed with peak/final footprint
+  230,296,768/211,405,952 bytes, peak/final RSS
+  245,776,384/113,639,424 bytes and swap delta 0.
+- 30m remains `BLOCKED_ENVIRONMENT`: 2026-08-31 stopped after 5m10s; the first
+  2026-09-10 attempt stopped after approximately 20s; a controlled retry after
+  twelve unchanged no-app swap observations stopped after 10s. App footprint
+  stayed below 208 MiB and owned-process cleanup passed each time. 120m
+  `NOT RUN`; merge/release stay blocked without a clean host session or an
+  explicit documented waiver.

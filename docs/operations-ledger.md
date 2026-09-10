@@ -11,17 +11,42 @@
 | External archive | VERIFIED | 12 MiB; directory comparison PASS |
 | Pre-separation Git bundle | VERIFIED COMPLETE | Full bundle verified before clean recreation |
 | Historical restore verification | VERIFIED | Pre-separation bundle cloned in isolation; full strict fsck, exact historical HEAD and clean worktree PASS on 2026-08-31 |
-| Current terminal restore verification | VERIFIED | Bundle for `83e92ba4aca685abc21888cb24317a2c611eb39d`; verify, isolated clone, strict fsck, exact HEAD and clean worktree PASS |
+| Prior-head terminal restore verification | VERIFIED | Bundle for `83e92ba4aca685abc21888cb24317a2c611eb39d`; superseded but retained through closure decision |
+| Current code-head terminal restore verification | VERIFIED | Bundle for `1c3a37f5f370111c5856a433f77e20a29ed3db9c`; verify, isolated clone, strict fsck, exact HEAD and clean worktree PASS; later factual docs do not change code |
 | Repository root | VERIFIED | `5780ef66b20143e918e1d88399bfe985b0c1287e` |
 | Current main / origin | VERIFIED | PR-04 merged as `2e7d9218c2db462bd0b45ec9f372462b1945cd00` |
-| Verified code/CI head | VERIFIED PUBLISHED | `codex/adaptive-orderbooks`; `83e92ba4aca685abc21888cb24317a2c611eb39d` pushed to PR #10; later factual docs do not change code |
+| Verified code/CI head | VERIFIED PUBLISHED | `codex/adaptive-orderbooks`; correction `1c3a37f5f370111c5856a433f77e20a29ed3db9c` pushed to PR #10 |
 | GitHub publication | VERIFIED PUBLIC | Read-only check 2026-08-31: `PUBLIC`, default branch `main`; no visibility change performed in this closure |
 | CI acceptance | VERIFIED | PR-04 run `33302487008`: Release build PASS; official tests 327/327 PASS |
-| Closure CI | VERIFIED | Corrected run `33392591048`: Release build PASS; 367/367 tests PASS; one-million-cycle replay PASS |
+| Closure CI | VERIFIED | Latest run `33399814390`: Release build PASS; 367/367 tests PASS; one-million-cycle replay PASS |
 | Older sprint commit IDs | PRE-SEPARATION LOCAL HISTORY | IDs in older evidence documents are preserved by the verified bundle and are not ancestors of the recreated root |
-| Tag / release | BLOCKED | Closure authority exists, but visual and 15/30/120-minute soak gates have not passed |
+| Tag / release | BLOCKED | Visual and clean 15-minute gates PASS; 30-minute gate repeatedly stopped on host-wide swap growth, so 120-minute prerequisite and release remain blocked |
 
 Restore details: [`recovery-restore-evidence.md`](recovery-restore-evidence.md).
+
+## 2026-08-31 / 2026-09-10 S1.7 correction package
+
+- Exact local package executable SHA-256:
+  `6474cdfc5cc565bb2909c3dfbbedcab0ec1b298fc59293006c1e3c22929d48a9`;
+  packaged `Trdng.Desktop.dll` SHA-256:
+  `bda0e827ca86ba49fa93a72da98ef6bf1d8fe5221fa8d1137461427f51bc3119`;
+  strict deep ad-hoc codesign PASS.
+- Fresh visual acceptance PASS: BTC default, three populated `LIVE` books,
+  large/full-screen fill, three settings overlays, and corrected fully visible
+  ask/bid maxima around the spread strip.
+- Clean no-Computer-Use 15-minute guard PASS: peak/final physical footprint
+  230,296,768/211,405,952 bytes; swap delta 0; cleanup PASS.
+- 30-minute gate BLOCKED_ENVIRONMENT. One 2026-08-31 and two 2026-09-10
+  attempts stopped on system swap growth with application footprint below
+  208 MiB; owned process cleanup PASS. Two-hour gate NOT RUN.
+- Code correction `1c3a37f5f370111c5856a433f77e20a29ed3db9c` is pushed to
+  PR #10; CI `33399814390` PASS. Current recovery bundle
+  `artifacts/backups/trdng-terminal-closure-1c3a37f.bundle` is 4,259,275 bytes,
+  mode `0600`, SHA-256
+  `a2db3423688cba7df07d6637517484fe85910e0908346f358d604531c9c538d7`;
+  bundle verify, isolated clone, strict fsck, exact HEAD and clean worktree PASS.
+  Merge/release remain pending until the memory gate can run in a clean macOS
+  session.
 
 ## 2026-08-20 masked credential UI verification
 

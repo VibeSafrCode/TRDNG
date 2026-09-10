@@ -103,7 +103,7 @@ starter shortcuts. MEXC Spot and Gate/Bybit USDT Perpetual remain product-
 isolated; only exact catalog-proven venue symbols create public clients. No
 private or trading scope changed. Evidence: [`s1.6-evidence.md`](s1.6-evidence.md).
 
-## S1.7 — adaptive independent order books / implementation accepted, release blocked
+## S1.7 — adaptive independent order books / visual + 15m accepted, release gates continue
 
 BTC/USDT is the startup/test selection. MEXC, Gate and Bybit perpetual books are
 public and independent; MEXC uses bounded REST polling. Each venue owns its
@@ -112,12 +112,14 @@ Automatic bars normalize the visible ask and bid sides independently. The
 Founder-reported spread-row clipping has a dedicated safety gap. Settings now
 persist through bounded atomic writes. The final Release build, 367/367 tests,
 one-million-cycle replay, package/codesign and guarded five-minute run pass.
-The next 15-minute gate stopped fail-closed on host-wide swap growth while the
-app footprint stayed near 190 MiB; 30-minute/two-hour gates were not started.
-Screenshot acceptance is `BLOCKED_ENVIRONMENT` because macOS denied display
-capture. Current terminal recovery verification, PR publication and corrected
-GitHub CI now pass. Merge/release still require the visual and quiet-host soak
-gates or an explicit Founder waiver. Evidence:
+Fresh visual QA now proves BTC default, three populated `LIVE` books,
+large/full-screen fill, all three settings panels and the corrected sales-side
+maximum without spread overlap. A clean exact-hash 15-minute guard passes near
+200 MiB physical footprint with zero swap growth. Recovery verification passes
+for current correction head `1c3a37f`. PR publication and GitHub CI pass. The quiet-host
+30-minute gate is blocked by repeated host-wide swap growth while the app stays
+below its healthy memory target; the 120-minute gate cannot start until that
+prerequisite passes. Merge/release therefore remain gated. Evidence:
 [`s1.7-adaptive-orderbooks-evidence.md`](s1.7-adaptive-orderbooks-evidence.md).
 
 MEXC Futures public books допустимы. Private futures trading остаётся
