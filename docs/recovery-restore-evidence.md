@@ -5,13 +5,13 @@ Date: 2026-08-31; updated 2026-09-10. Status:
 
 ## Current terminal-only recovery artifact
 
-- Covered current correction head:
-  `1c3a37f5f370111c5856a433f77e20a29ed3db9c`.
+- Covered current code head:
+  `9af7e0beb64a8bee7d311048ecde21f3519b01e5`.
 - Repository-relative locator (ignored, local-only):
-  `artifacts/backups/trdng-terminal-closure-1c3a37f.bundle`.
-- Size: `4259275` bytes; permissions: `0600` (`-rw-------`).
+  `artifacts/backups/trdng-terminal-closure-9af7e0b.bundle`.
+- Size: `4270248` bytes; permissions: `0600` (`-rw-------`).
 - SHA-256:
-  `a2db3423688cba7df07d6637517484fe85910e0908346f358d604531c9c538d7`.
+  `b304ce6a967df7f4f2ccaa422d83ae37ceca97e87c710f1422d974ac772f200d`.
 - `git bundle verify`: PASS; complete history and exact branch ref.
 - Isolated branch-aware clone under `/private/tmp`: PASS.
 - `git fsck --full --strict`: PASS; exact restored HEAD and clean worktree PASS.
@@ -38,7 +38,7 @@ Date: 2026-08-31; updated 2026-09-10. Status:
   worktree.
 
 This prior artifact covers the earlier verified code/CI head exactly. It is
-superseded for current recovery by the `1c3a37f` bundle above.
+superseded for current recovery by the `9af7e0b` bundle above.
 
 ## Historical pre-separation artifact
 

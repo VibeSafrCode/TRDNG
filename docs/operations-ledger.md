@@ -12,41 +12,47 @@
 | Pre-separation Git bundle | VERIFIED COMPLETE | Full bundle verified before clean recreation |
 | Historical restore verification | VERIFIED | Pre-separation bundle cloned in isolation; full strict fsck, exact historical HEAD and clean worktree PASS on 2026-08-31 |
 | Prior-head terminal restore verification | VERIFIED | Bundle for `83e92ba4aca685abc21888cb24317a2c611eb39d`; superseded but retained through closure decision |
-| Current code-head terminal restore verification | VERIFIED | Bundle for `1c3a37f5f370111c5856a433f77e20a29ed3db9c`; verify, isolated clone, strict fsck, exact HEAD and clean worktree PASS; later factual docs do not change code |
+| Current code-head terminal restore verification | VERIFIED | Bundle for `9af7e0beb64a8bee7d311048ecde21f3519b01e5`; verify, isolated clone, strict fsck, exact HEAD and clean worktree PASS; later factual docs do not change code |
 | Repository root | VERIFIED | `5780ef66b20143e918e1d88399bfe985b0c1287e` |
 | Current main / origin | VERIFIED | PR-04 merged as `2e7d9218c2db462bd0b45ec9f372462b1945cd00` |
-| Verified code/CI head | VERIFIED PUBLISHED | `codex/adaptive-orderbooks`; correction `1c3a37f5f370111c5856a433f77e20a29ed3db9c` pushed to PR #10 |
+| Verified code/CI head | VERIFIED PUBLISHED | `codex/adaptive-orderbooks`; accessibility correction `9af7e0beb64a8bee7d311048ecde21f3519b01e5` pushed to PR #10 |
 | GitHub publication | VERIFIED PUBLIC | Read-only check 2026-08-31: `PUBLIC`, default branch `main`; no visibility change performed in this closure |
 | CI acceptance | VERIFIED | PR-04 run `33302487008`: Release build PASS; official tests 327/327 PASS |
-| Closure CI | VERIFIED | Latest run `33399814390`: Release build PASS; 367/367 tests PASS; one-million-cycle replay PASS |
+| Closure CI | VERIFIED | Latest run `34470736716`: Release build PASS; 367/367 tests PASS; one-million-cycle replay PASS |
 | Older sprint commit IDs | PRE-SEPARATION LOCAL HISTORY | IDs in older evidence documents are preserved by the verified bundle and are not ancestors of the recreated root |
-| Tag / release | BLOCKED | Visual and clean 15-minute gates PASS; 30-minute gate repeatedly stopped on host-wide swap growth, so 120-minute prerequisite and release remain blocked |
+| Tag / release | BLOCKED | Predecessor package `6474cdf...` visual and clean 15-minute gates PASS; current package GUI/soak is not PASS because host-wide swap growth stops it, so 30/120-minute prerequisites and release remain blocked |
 
 Restore details: [`recovery-restore-evidence.md`](recovery-restore-evidence.md).
 
 ## 2026-08-31 / 2026-09-10 S1.7 correction package
 
-- Exact local package executable SHA-256:
-  `6474cdfc5cc565bb2909c3dfbbedcab0ec1b298fc59293006c1e3c22929d48a9`;
+- Current local package executable SHA-256:
+  `07a2dd98b5353ed7159db15981765575155d0f68248fe33c0bbecebbd46b204f`;
   packaged `Trdng.Desktop.dll` SHA-256:
-  `bda0e827ca86ba49fa93a72da98ef6bf1d8fe5221fa8d1137461427f51bc3119`;
+  `304db925690b671645401a0d01b92416212fb6ae323ded869935b825b33ab062`;
   strict deep ad-hoc codesign PASS.
-- Fresh visual acceptance PASS: BTC default, three populated `LIVE` books,
+- Predecessor package `6474cdf...` visual acceptance PASS: BTC default, three
+  populated `LIVE` books,
   large/full-screen fill, three settings overlays, and corrected fully visible
   ask/bid maxima around the spread strip.
-- Clean no-Computer-Use 15-minute guard PASS: peak/final physical footprint
+- Predecessor package `6474cdf...` clean no-Computer-Use 15-minute guard PASS:
+  peak/final physical footprint
   230,296,768/211,405,952 bytes; swap delta 0; cleanup PASS.
 - 30-minute gate BLOCKED_ENVIRONMENT. One 2026-08-31 and two 2026-09-10
   attempts stopped on system swap growth with application footprint below
   208 MiB; owned process cleanup PASS. Two-hour gate NOT RUN.
-- Code correction `1c3a37f5f370111c5856a433f77e20a29ed3db9c` is pushed to
-  PR #10; CI `33399814390` PASS. Current recovery bundle
-  `artifacts/backups/trdng-terminal-closure-1c3a37f.bundle` is 4,259,275 bytes,
+- Accessibility correction `9af7e0beb64a8bee7d311048ecde21f3519b01e5`
+  is pushed to PR #10; CI `34470736716` PASS. Current recovery bundle
+  `artifacts/backups/trdng-terminal-closure-9af7e0b.bundle` is 4,270,248 bytes,
   mode `0600`, SHA-256
-  `a2db3423688cba7df07d6637517484fe85910e0908346f358d604531c9c538d7`;
+  `b304ce6a967df7f4f2ccaa422d83ae37ceca97e87c710f1422d974ac772f200d`;
   bundle verify, isolated clone, strict fsck, exact HEAD and clean worktree PASS.
   Merge/release remain pending until the memory gate can run in a clean macOS
   session.
+- The current package guarded visual attempt stopped after 10 seconds on
+  host-wide swap growth at 158,485,440 bytes app footprint, before visual input.
+  Cleanup PASS. Current-hash GUI and 15/30/120-minute gates are therefore not
+  claimed PASS.
 
 ## 2026-08-20 masked credential UI verification
 

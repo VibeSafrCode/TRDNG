@@ -322,9 +322,9 @@ Baseline зафиксирован: 2026-08-02 11:31 +05:00.
   `3e9d9e2cfc1ab0c3dffc54aa6cb3646e4c374966`.
 - CI run `32235655100`: Release build PASS; official tests 245/245 PASS.
 - Fresh-clone excluded path/content scans: zero; worktree clean.
-- At publication time restore was NOT RUN. Superseded status: historical
-  pre-separation bundle restore passed on 2026-08-31; current terminal-only
-  recovery remains pending the accepted closure commit.
+- At publication time restore was `NOT RUN`. That historical status is
+  superseded by the verified current-head terminal-only recovery recorded in
+  the final closure entry below.
 
 ## In-app Keychain entry — ACCEPTED / PUBLISHED
 
@@ -548,24 +548,26 @@ Baseline зафиксирован: 2026-08-02 11:31 +05:00.
 
 ### 2026-08-31 / 2026-09-10 visual and guarded closure correction
 
-- Exact-package visual acceptance now passes: BTC default, MEXC/Gate/Bybit
+- Predecessor package `6474cdf...` visual acceptance passes: BTC default,
+  MEXC/Gate/Bybit
   `LIVE`, populated large/full-screen books, three independent settings panels,
   and fully visible maximum ask/bid bars. The sales-side defect was a clipped
   nearest/largest ask; a symmetric 12-pixel spread reservation fixes it.
 - The original flyout did not open in the packaged app. It was replaced by one
-  bounded central overlay. Independent audit: no P0/P1; P2 Escape/backdrop/focus
-  accessibility polish remains.
-- Correction commit `1c3a37f5f370111c5856a433f77e20a29ed3db9c` is pushed
-  to PR #10. CI `33399814390`: Release build PASS, 367/367 tests PASS,
+  bounded central overlay. Follow-up code head `9af7e0b` closes Escape/backdrop,
+  cyclic Tab and prior-focus behavior. Independent audit: no P0/P1/P2.
+- Accessibility correction commit `9af7e0beb64a8bee7d311048ecde21f3519b01e5`
+  is pushed to PR #10. CI `34470736716`: Release build PASS, 367/367 tests PASS,
   one-million-cycle replay PASS.
-- Final package executable SHA-256:
-  `6474cdfc5cc565bb2909c3dfbbedcab0ec1b298fc59293006c1e3c22929d48a9`;
+- Current package executable SHA-256:
+  `07a2dd98b5353ed7159db15981765575155d0f68248fe33c0bbecebbd46b204f`;
   packaged Desktop DLL SHA-256:
-  `bda0e827ca86ba49fa93a72da98ef6bf1d8fe5221fa8d1137461427f51bc3119`;
+  `304db925690b671645401a0d01b92416212fb6ae323ded869935b825b33ab062`;
   strict deep codesign PASS.
-- Visual-stress 15m completed but is not memory acceptance: Computer Use and
+- Predecessor `6474cdf...` visual-stress 15m completed but is not memory
+  acceptance: Computer Use and
   full-screen work raised physical footprint to 819,040,448 bytes. The clean
-  no-Computer-Use 15m gate passed with peak/final footprint
+  no-Computer-Use `6474cdf...` 15m gate passed with peak/final footprint
   230,296,768/211,405,952 bytes, peak/final RSS
   245,776,384/113,639,424 bytes and swap delta 0.
 - 30m remains `BLOCKED_ENVIRONMENT`: 2026-08-31 stopped after 5m10s; the first
@@ -574,3 +576,9 @@ Baseline зафиксирован: 2026-08-02 11:31 +05:00.
   stayed below 208 MiB and owned-process cleanup passed each time. 120m
   `NOT RUN`; merge/release stay blocked without a clean host session or an
   explicit documented waiver.
+- Current-hash 5m GUI attempt also stopped after 10s on `SYSTEM_SWAP_GROWTH`
+  before visual input, with app footprint 158,485,440 bytes and cleanup PASS.
+  Current code-head recovery bundle `trdng-terminal-closure-9af7e0b.bundle`:
+  4,270,248 bytes, mode 0600, SHA-256
+  `b304ce6a967df7f4f2ccaa422d83ae37ceca97e87c710f1422d974ac772f200d`;
+  verify/isolated clone/fsck/exact HEAD/clean PASS.

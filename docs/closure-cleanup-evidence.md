@@ -2,7 +2,7 @@
 
 Date: 2026-08-31; updated 2026-09-10. Branch:
 `codex/adaptive-orderbooks`. Status:
-`IMPLEMENTATION + VISUAL + 15M ACCEPTED / 30M BLOCKED_ENVIRONMENT / 120M NOT RUN`.
+`IMPLEMENTATION + CI ACCEPTED / FINAL PACKAGE GUI + SOAK BLOCKED_ENVIRONMENT / 120M NOT RUN`.
 
 ## Closed implementation and hardening
 
@@ -45,36 +45,41 @@ Date: 2026-08-31; updated 2026-09-10. Branch:
   The first publish process exited 1 without output and produced zero files;
   the app was still untouched. One controlled retry with build-server reuse
   disabled completed successfully before the single app replacement.
-- Signed executable SHA-256:
-  `6474cdfc5cc565bb2909c3dfbbedcab0ec1b298fc59293006c1e3c22929d48a9`.
-- Packaged/publish `Trdng.Desktop.dll` SHA-256:
-  `bda0e827ca86ba49fa93a72da98ef6bf1d8fe5221fa8d1137461427f51bc3119`.
-- Guarded five-minute exact-package run: `PASS_DURATION`, peak physical
+- Current signed executable SHA-256:
+  `07a2dd98b5353ed7159db15981765575155d0f68248fe33c0bbecebbd46b204f`.
+- Current packaged/publish `Trdng.Desktop.dll` SHA-256:
+  `304db925690b671645401a0d01b92416212fb6ae323ded869935b825b33ab062`.
+- Historical predecessor package `1d93a3...` guarded five-minute run:
+  `PASS_DURATION`, peak physical
   footprint 191,515,776 bytes, swap growth 0, cleanup PASS.
-- The following 15-minute attempt stopped after 6m25s on
+- The following `1d93a3...` 15-minute attempt stopped after 6m25s on
   `SYSTEM_SWAP_GROWTH`; app peak/final footprint was
   199,281,728/190,204,992 bytes and cleanup PASS. Classification:
   `BLOCKED_ENVIRONMENT`, not app growth.
-- Fresh exact-package visual QA later became available. It proved BTC default,
+- Fresh visual QA on predecessor package `6474cdf...` later became available.
+  It proved BTC default,
   three populated `LIVE` books, large/full-screen fill and all three settings
   panels. The broken flyout was replaced by a bounded inline overlay. A clipped
   largest ask explained the incorrect sales-side scale; a symmetric 12-pixel
   spread reservation corrected it on all three venues.
-- The visual-stress run is not memory evidence: Computer Use/full-screen work
+- The predecessor `6474cdf...` visual-stress run is not memory evidence:
+  Computer Use/full-screen work
   raised physical footprint to 819,040,448 bytes without swap growth. The clean
-  no-Computer-Use exact-hash 15-minute gate passed with peak/final footprint
+  no-Computer-Use `6474cdf...` 15-minute gate passed with peak/final footprint
   230,296,768/211,405,952 bytes and zero swap delta.
-- Correction commit `1c3a37f5f370111c5856a433f77e20a29ed3db9c` is pushed.
-  CI `33399814390` passed Release build, 367/367 tests and the bounded
+- Accessibility correction commit `9af7e0beb64a8bee7d311048ecde21f3519b01e5`
+  is pushed. CI `34470736716` passed Release build, 367/367 tests and the bounded
   one-million-cycle replay.
 
 ## Open gates, not hidden debt
 
-- Screenshot/large-window/settings/populated-book acceptance is `PASS` on the
-  final exact package. Computer Use did not synthesize the exact trackpad wheel
+- Screenshot/large-window/settings/populated-book acceptance is `PASS` on
+  predecessor exact package `6474cdf...`. Computer Use did not synthesize the
+  exact trackpad wheel
   path, so only that GUI gesture remains `NOT PROVEN`; deterministic adjustment
   tests pass.
-- Quiet-host guarded 15-minute gate is `PASS`. Three 30-minute attempts stopped
+- Predecessor package `6474cdf...` quiet-host guarded 15-minute gate is `PASS`.
+  Three 30-minute attempts stopped
   on `SYSTEM_SWAP_GROWTH`: 2026-08-31 after 5m10s with peak/final footprint
   207,949,120/205,081,856 bytes; 2026-09-10 after approximately 20 seconds with
   163,417,024 bytes; and a controlled retry after 10 seconds with 152,030,208
@@ -83,25 +88,27 @@ Date: 2026-08-31; updated 2026-09-10. Branch:
   `39228865` in twelve samples from `10:30:09Z` through `10:31:59Z`; it is not
   claimed as a watchdog artifact. The 30-minute gate is `BLOCKED_ENVIRONMENT`;
   the two-hour release gate remains `NOT RUN`.
-- Independent audit found no P0/P1 in the overlay or spread correction. A P2
-  accessibility debt remains: the overlay is closed by its explicit button but
-  does not yet trap focus or close on Escape/backdrop. It does not invalidate
-  visual or memory evidence.
+- The P2 accessibility debt is closed in current code head `9af7e0b`: Escape and
+  backdrop close, cyclic Tab navigation and prior-focus restoration. Independent
+  audit found no P0/P1/P2; local 367/367, full Release build and GitHub CI pass.
+  Current-hash guarded GUI attempt stopped on host swap after 10 seconds before
+  visual input, at 158,485,440 bytes app footprint; cleanup PASS.
 - Closure implementation commit:
-  `fb252bfa0afda8f57d51202d74baeb29e8954d79`. Published branch head after the
-  recovery-doc record and audited CI correction produced verified code/CI head:
-  `83e92ba4aca685abc21888cb24317a2c611eb39d`. Its current terminal-only Git
-  bundle passed verification, isolated clone, strict fsck, exact HEAD and clean
-  worktree checks. Exact artifact identity and retention are recorded in
-  [`recovery-restore-evidence.md`](recovery-restore-evidence.md). The already
-  verified pre-separation bundle remains historical only.
+  `fb252bfa0afda8f57d51202d74baeb29e8954d79`. Earlier verified code/CI head
+  `83e92ba4aca685abc21888cb24317a2c611eb39d` and its bundle are retained but
+  superseded. Current verified code/CI head is
+  `9af7e0beb64a8bee7d311048ecde21f3519b01e5`; its terminal-only Git bundle passed
+  verification, isolated clone, strict fsck, exact HEAD and clean worktree
+  checks. Exact artifact identity and retention are recorded in
+  [`recovery-restore-evidence.md`](recovery-restore-evidence.md). The verified
+  pre-separation bundle remains historical only.
 - PR #10 is updated. The first closure run `33392273068` exposed a CI-only
   tmpfs-capacity error before compilation; the independently audited correction
   preserved the 2 GiB/no-swap envelope and moved only package/tool caches to
   job-scoped runner temp. Corrected run `33392591048`: Release build PASS,
   367/367 tests PASS and one-million-cycle replay PASS. Merge, tag and release
-  remain blocked until the visual and soak gates pass or the Founder explicitly
-  accepts a documented waiver.
+  remain blocked until current-package GUI and soak gates pass or the Founder
+  explicitly accepts a documented waiver.
 
 ## Security boundary
 

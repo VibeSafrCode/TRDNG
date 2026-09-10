@@ -111,12 +111,16 @@ depth, trackpad step, automatic/manual volume reference and four bar colors.
 Automatic bars normalize the visible ask and bid sides independently. The
 Founder-reported spread-row clipping has a dedicated safety gap. Settings now
 persist through bounded atomic writes. The final Release build, 367/367 tests,
-one-million-cycle replay, package/codesign and guarded five-minute run pass.
-Fresh visual QA now proves BTC default, three populated `LIVE` books,
+one-million-cycle replay and package/codesign pass. A historical guarded
+five-minute run passes on predecessor package `1d93a3...`. Fresh visual QA on
+predecessor package `6474cdf...` proves BTC default, three populated `LIVE` books,
 large/full-screen fill, all three settings panels and the corrected sales-side
 maximum without spread overlap. A clean exact-hash 15-minute guard passes near
-200 MiB physical footprint with zero swap growth. Recovery verification passes
-for current correction head `1c3a37f`. PR publication and GitHub CI pass. The quiet-host
+200 MiB physical footprint with zero swap growth on predecessor package
+`6474cdf...`. Current head `9af7e0b` additionally closes Escape/backdrop/focus
+accessibility and passes independent audit, 367/367 local tests, Release build,
+package/codesign, recovery restore and GitHub CI. Its guarded GUI attempt was
+stopped by host-wide swap before visual input. PR publication passes. The quiet-host
 30-minute gate is blocked by repeated host-wide swap growth while the app stays
 below its healthy memory target; the 120-minute gate cannot start until that
 prerequisite passes. Merge/release therefore remain gated. Evidence:
