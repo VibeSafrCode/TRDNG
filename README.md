@@ -51,3 +51,7 @@ Live public-market smokes are excluded from normal tests and CI. Private calls, 
 Stage 1 is incomplete. S1.7 and cleanup are accepted with risk for the [S1.7 prerelease](docs/s1.7-release.md): 367/367 deterministic tests pass, while the Founder explicitly waived the remaining current-package GUI and memory runs on 2026-09-10. Long-run stability remains unproven and runtime memory protection stays enabled. MEXC Futures private trading is officially blocked; production `/api/v3/order`, cancel, withdrawal, transfer, smart routing and multi-venue execution are absent or forbidden.
 
 No license has been selected. Until the owner chooses one, do not assume permission to redistribute or reuse the source.
+
+[Download MMM_618 S1.7 for macOS arm64](https://github.com/VibeSafrCode/TRDNG/releases/tag/v0.1.0-s1.7)
+— prerelease accepted with the documented GUI/soak waiver; ad-hoc signed and
+not notarized.
